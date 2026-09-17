@@ -21,6 +21,8 @@ import {
   Info,
   Clock,
   Newspaper,
+  CalendarCheck2,
+  UserCheck,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -37,6 +39,16 @@ const data = {
       title: "Dashboard",
       url: "/dashboard",
       icon: LayoutDashboard,
+    },
+    {
+      title: "Attendance",
+      url: "/attendance",
+      icon: UserCheck,
+    },
+    {
+      title: "Daily Activity",
+      url: "/daily-activity",
+      icon: CalendarCheck2,
     },
     {
       title: "Permintaan Desain",
@@ -64,6 +76,11 @@ const data = {
       title: "Dashboard",
       url: "/dashboard",
       icon: LayoutDashboard,
+    },
+    {
+      title: "Attendance",
+      url: "/attendance",
+      icon: UserCheck,
     },
     {
       title: "Permintaan Desain",
