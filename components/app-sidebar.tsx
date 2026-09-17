@@ -78,11 +78,6 @@ const data = {
       icon: LayoutDashboard,
     },
     {
-      title: "Attendance",
-      url: "/attendance",
-      icon: UserCheck,
-    },
-    {
       title: "Permintaan Desain",
       url: "/permintaan-desain",
       icon: FileBox,
