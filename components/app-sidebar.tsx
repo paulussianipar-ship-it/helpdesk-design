@@ -23,6 +23,7 @@ import {
   Newspaper,
   CalendarCheck2,
   UserCheck,
+  FolderKanban,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -51,6 +52,11 @@ const data = {
       icon: CalendarCheck2,
     },
     {
+      title: "Program Kerja",
+      url: "/program-kerja",
+      icon: FolderKanban,
+    },
+    {
       title: "Permintaan Desain",
       url: "/permintaan-desain",
       icon: FileBox,
@@ -76,6 +82,11 @@ const data = {
       title: "Dashboard",
       url: "/dashboard",
       icon: LayoutDashboard,
+    },
+    {
+      title: "Program Kerja",
+      url: "/program-kerja",
+      icon: FolderKanban,
     },
     {
       title: "Permintaan Desain",
