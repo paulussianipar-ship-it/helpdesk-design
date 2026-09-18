@@ -1,5 +1,3 @@
-"use client";
-
 import { Suspense } from "react";
 import PermintaanClientContent from "./ClientComponent";
 import { Content } from "@/components/content";
