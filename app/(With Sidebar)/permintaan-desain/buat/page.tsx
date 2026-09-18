@@ -62,11 +62,21 @@ const dataDepartment: ComboboxData = [
 ];
 
 const dataProject: ComboboxData = [
-  { label: "Desain Poster", value: "Desain Poster" },
-  { label: "Desain Logo", value: "Desain Logo" },
-  { label: "Desain Flyer", value: "Desain Flyer" },
-  { label: "Desain Kemasan", value: "Desain Kemasan" },
-  { label: "Desain Event", value: "Desain Event" },
+  { label: "Design Poster", value: "Design Poster" },
+  { label: "Design Flyer", value: "Design Flyer" },
+  { label: "Design Brosur", value: "Design Brosur" },
+  { label: "Design Kemasan", value: "Design Kemasan" },
+  { label: "Design Catalog", value: "Design Catalog" },
+  { label: "Design Mini Catalog", value: "Design Mini Catalog" },
+  { label: "Design File Presentasi", value: "Design File Presentasi" },
+  { label: "Design Label", value: "Design Label" },
+  { label: "Design Stiker", value: "Design Stiker" },
+  { label: "Photo Event", value: "Photo Event" },
+  { label: "Photo Product", value: "Photo Product" },
+  { label: "Photo Instalasi", value: "Photo Instalasi" },
+  { label: "Video Event", value: "Video Event" },
+  { label: "Video Product", value: "Video Product" },
+  { label: "Video Instlasi", value: "Video Instlasi" },
   { label: "Lainnya...", value: "Lainnya" },
 ];
 

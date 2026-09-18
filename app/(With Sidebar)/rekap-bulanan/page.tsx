@@ -39,9 +39,9 @@ export default function RekapBulananRoute() {
 
       {/* Judul khusus yang hanya muncul saat print/PDF */}
       <div className="hidden print:block print:mb-4">
-        <h1 className="text-xl font-bold">Rekap Bulanan Tiket Helpdesk Design 2026</h1>
+        <h1 className="text-xl font-bold">Rekap Bulanan Terintegrasi 2026</h1>
         <p className="text-xs text-foreground/70 mt-1">
-          Permintaan Design, Attendance, Daily Activity &amp; STB HSE.
+          Laporan Terpadu 4 Modul: Permintaan Design, Daily Activity, Attendance, &amp; Standby STB HSE.
         </p>
         <div className="border-b border-foreground/30 mt-2" />
       </div>
