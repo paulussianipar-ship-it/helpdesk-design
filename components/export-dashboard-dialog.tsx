@@ -122,13 +122,23 @@ export function ExportDashboardDialog({
 
       const FAREL_ID = "54e6f310-813b-447b-aac0-9052423440da";
 
+      const cleanJudul = (title: string) => {
+        if (!title) return title;
+        return title
+          .replace(/\s*[-–—]\s*IT[0-9]+/gi, "")
+          .replace(/\s*\(\s*IT[0-9]+\s*\)/gi, "")
+          .replace(/\bIT[0-9]{6,}\b/gi, "")
+          .replace(/\s+/g, " ")
+          .trim();
+      };
+
       // Apply In-Memory Filters
       let filteredRows = rows.map((r, i) => {
         const designerName = r.designer || (r.admin === FAREL_ID ? "Farel Ramadhan" : "Paulus Sianipar");
         return {
           no: i + 1,
           tanggal: r.created_at?.slice(0, 10) || tanggalAwal,
-          judul: r.judul || r.task_description || `Tiket #${i + 1}`,
+          judul: cleanJudul(r.judul || r.task_description || `Tiket #${i + 1}`),
           designer: designerName,
           teknisi: designerName,
           kategori: r.kategori || r.project || "Design Request",

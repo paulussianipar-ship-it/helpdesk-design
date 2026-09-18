@@ -102,6 +102,27 @@ export async function GET(request: NextRequest) {
     const FAREL_ID = "54e6f310-813b-447b-aac0-9052423440da";
     const PAULUS_ID = "bcfdf89c-d1e2-4602-80aa-005a1beb1d3c";
 
+    const cleanJudul = (title: string) => {
+      if (!title) return title;
+      return title
+        .replace(/\s*[-–—]\s*IT[0-9]+/gi, "")
+        .replace(/\s*\(\s*IT[0-9]+\s*\)/gi, "")
+        .replace(/\bIT[0-9]{6,}\b/gi, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    };
+
+    const cleanDeskripsi = (desc: string) => {
+      if (!desc) return desc;
+      return desc
+        .replace(/\[\s*Tiket:\s*IT[0-9]+\s*\|\s*Prioritas:/gi, "[Prioritas:")
+        .replace(/Referensi Tiket IT Helpdesk:\s*IT[0-9]+/gi, "")
+        .replace(/\[\s*Tiket:\s*IT[0-9]+\s*\]/gi, "")
+        .replace(/\bIT[0-9]{6,}\b/gi, "")
+        .replace(/\n\s*\n/g, "\n")
+        .trim();
+    };
+
     const formattedData = items.map((item) => {
       let adminName = item.admin ? nameMap[item.admin] : "-";
       if (!adminName || adminName === "-") {
@@ -111,6 +132,8 @@ export async function GET(request: NextRequest) {
 
       return {
         ...item,
+        judul: cleanJudul(item.judul),
+        deskripsi: cleanDeskripsi(item.deskripsi),
         requester_name: item.requester ? nameMap[item.requester] || "Pelapor" : "Pelapor",
         admin_name: adminName || "-",
       };
