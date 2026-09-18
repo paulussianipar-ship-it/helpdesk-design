@@ -64,7 +64,7 @@ export function ExportDashboardDialog({
       try {
         let query = supabase
           .from("permintaan")
-          .select("id, created_at, due_date, judul, deskripsi, project, departemen, status")
+          .select("id, created_at, due_date, judul, deskripsi, project, departemen, status, admin")
           .gte("created_at", `${tanggalAwal}T00:00:00.000Z`)
           .lte("created_at", `${tanggalAkhir}T23:59:59.999Z`);
 
@@ -120,19 +120,24 @@ export function ExportDashboardDialog({
         });
       }
 
+      const FAREL_ID = "54e6f310-813b-447b-aac0-9052423440da";
+
       // Apply In-Memory Filters
-      let filteredRows = rows.map((r, i) => ({
-        no: i + 1,
-        tanggal: r.created_at?.slice(0, 10) || tanggalAwal,
-        judul: r.judul || r.task_description || `Tiket #${i + 1}`,
-        designer: r.designer || (i % 2 === 0 ? "Paulus Sianipar" : "Farel Ramadhan"),
-        teknisi: r.teknisi || (i % 2 === 0 ? "Paulus Sianipar" : "Farel Ramadhan"),
-        kategori: r.kategori || r.project || "Design Request",
-        project: r.project || "IT Helpdesk",
-        departemen: r.departemen || "Umum",
-        status: r.status || "Done",
-        due_date: r.due_date?.slice(0, 10) || tanggalAkhir,
-      }));
+      let filteredRows = rows.map((r, i) => {
+        const designerName = r.designer || (r.admin === FAREL_ID ? "Farel Ramadhan" : "Paulus Sianipar");
+        return {
+          no: i + 1,
+          tanggal: r.created_at?.slice(0, 10) || tanggalAwal,
+          judul: r.judul || r.task_description || `Tiket #${i + 1}`,
+          designer: designerName,
+          teknisi: designerName,
+          kategori: r.kategori || r.project || "Design Request",
+          project: r.project || "IT Helpdesk",
+          departemen: r.departemen || "Umum",
+          status: r.status || "Done",
+          due_date: r.due_date?.slice(0, 10) || tanggalAkhir,
+        };
+      });
 
       // Filter by Designer
       if (designer !== "all") {
@@ -218,7 +223,6 @@ export function ExportDashboardDialog({
           r.tanggal,
           r.judul,
           r.designer,
-          r.teknisi,
           r.kategori,
           `${r.project} - ${r.departemen}`,
           r.status,
@@ -230,10 +234,9 @@ export function ExportDashboardDialog({
       wsDetail["!cols"] = [
         { wch: 6 },
         { wch: 14 },
-        { wch: 36 },
-        { wch: 20 },
+        { wch: 38 },
         { wch: 22 },
-        { wch: 18 },
+        { wch: 22 },
         { wch: 28 },
         { wch: 18 },
         { wch: 16 },

@@ -252,12 +252,23 @@ export async function fetchIntegratedRekap(year: number = 2026): Promise<YearInt
 
     if (monthTickets.length > 0) {
       masuk = monthTickets.length;
+      let totalDurationHours = 0;
+      let durationCount = 0;
       monthTickets.forEach((t) => {
         const st = t.status || "TO DO";
         permintaanStatuses[st] = (permintaanStatuses[st] || 0) + 1;
         if (st === "DONE") selesai++;
+        if (t.created_at && (t.updated_at || t.due_date)) {
+          const end = new Date(t.updated_at || t.due_date);
+          const start = new Date(t.created_at);
+          const diffHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+          if (diffHours > 0 && diffHours < 720) { // filter out extreme outliers (> 30 days)
+            totalDurationHours += diffHours;
+            durationCount++;
+          }
+        }
       });
-      durasiJam = 14.5;
+      durasiJam = durationCount > 0 ? Math.round((totalDurationHours / durationCount) * 10) / 10 : 5.5;
       slaPct = selesai > 0 ? Math.round((selesai / masuk) * 1000) / 10 : null;
     } else if (BASELINE_PERMINTAAN_2026[m]) {
       const base = BASELINE_PERMINTAAN_2026[m];

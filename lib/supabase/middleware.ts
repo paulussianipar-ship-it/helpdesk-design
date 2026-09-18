@@ -51,12 +51,15 @@ export async function updateSession(request: NextRequest) {
   const isPublicArticle =
     pathname === "/artikel" || pathname.startsWith("/artikel/");
 
+  const isApi = pathname.startsWith("/api");
+
   if (
     pathname !== "/" &&
     !user &&
     !pathname.startsWith("/login") &&
     !pathname.startsWith("/auth") &&
-    !isPublicArticle
+    !isPublicArticle &&
+    !isApi
   ) {
     // no user, potentially respond by redirecting the user to the login page
     const url = request.nextUrl.clone();

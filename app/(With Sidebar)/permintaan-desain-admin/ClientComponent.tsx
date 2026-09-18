@@ -80,6 +80,9 @@ export function PermintaanAdminClientContent() {
   const [startDateInput, setStartDateInput] = useState(startDate);
   const [endDateInput, setEndDateInput] = useState(endDate);
 
+  // State Realtime
+  const [isRealtimeConnected, setIsRealtimeConnected] = useState<boolean>(true);
+
   const createQueryString = useCallback(
     (paramsToUpdate: Record<string, string | number | undefined>) => {
       const params = new URLSearchParams(searchParams.toString());
@@ -98,37 +101,69 @@ export function PermintaanAdminClientContent() {
     [searchParams]
   );
 
-  useEffect(() => {
-    async function fetchPermintaan() {
-      setLoading(true);
+  const fetchPermintaan = useCallback(async () => {
+    setLoading(true);
 
-      const from = (currentPage - 1) * limit;
-      const to = from + limit - 1;
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(currentPage));
+      params.set("limit", String(limit));
+      if (searchTerm) params.set("search", searchTerm);
+      if (statusFilter && statusFilter !== "all") params.set("status", statusFilter);
+      if (startDate) params.set("startDate", startDate);
+      if (endDate) params.set("endDate", endDate);
 
-      let query = s
-        .from("permintaan")
-        .select(`id, judul, status, due_date, created_at`, { count: "exact" });
-
-      if (searchTerm) query = query.ilike("judul", `%${searchTerm}%`);
-      if (statusFilter) query = query.eq("status", statusFilter);
-      if (startDate) query = query.gte("created_at", startDate);
-      if (endDate) query = query.lte("created_at", `${endDate} 23:59:59`);
-
-      query = query.range(from, to).order("created_at", { ascending: false });
-
-      const { data, error, count } = await query;
-
-      if (error) {
-        toast.error("Gagal mengambil data: " + error.message);
-        setPermintaanList([]);
-      } else {
-        setPermintaanList((data as Permintaan[]) || []);
-        setTotalItems(count || 0);
-      }
+      const res = await fetch(`/api/permintaan?${params.toString()}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      setPermintaanList(json.data || []);
+      setTotalItems(json.total || 0);
+    } catch (error: any) {
+      toast.error("Gagal mengambil data: " + error.message);
+      setPermintaanList([]);
+    } finally {
       setLoading(false);
     }
+  }, [currentPage, searchTerm, statusFilter, startDate, endDate, limit]);
+
+  useEffect(() => {
     fetchPermintaan();
-  }, [s, currentPage, searchTerm, statusFilter, startDate, endDate, limit]);
+  }, [fetchPermintaan]);
+
+  // Realtime Subscription
+  useEffect(() => {
+    const channel = s
+      .channel("realtime-permintaan-admin")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "permintaan",
+        },
+        (payload) => {
+          fetchPermintaan();
+          if (payload.eventType === "INSERT") {
+            toast.info("Permintaan desain baru masuk!", { duration: 3000 });
+          } else if (payload.eventType === "UPDATE") {
+            toast.info("Status tiket permintaan diperbarui live", { duration: 2500 });
+          } else if (payload.eventType === "DELETE") {
+            toast.info("Tiket permintaan telah dihapus", { duration: 2500 });
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          setIsRealtimeConnected(true);
+        } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
+          setIsRealtimeConnected(false);
+        }
+      });
+
+    return () => {
+      s.removeChannel(channel);
+    };
+  }, [s, fetchPermintaan]);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -239,7 +274,32 @@ export function PermintaanAdminClientContent() {
   };
 
   return (
-    <Content title="Daftar Semua Permintaan Desain" size="lg">
+    <Content
+      title="Daftar Semua Permintaan Desain"
+      size="lg"
+      cardAction={
+        <Badge
+          variant="outline"
+          className={`text-xs flex items-center gap-1.5 font-normal py-1 px-2.5 transition-all shadow-sm ${
+            isRealtimeConnected
+              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+              : "border-amber-500/40 bg-amber-500/10 text-amber-600"
+          }`}
+        >
+          <span className="relative flex h-2 w-2">
+            {isRealtimeConnected && (
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            )}
+            <span
+              className={`relative inline-flex rounded-full h-2 w-2 ${
+                isRealtimeConnected ? "bg-emerald-500" : "bg-amber-500"
+              }`}
+            ></span>
+          </span>
+          {isRealtimeConnected ? "Live Real-time" : "Connecting..."}
+        </Badge>
+      }
+    >
       <div className="flex flex-col gap-4 mb-6">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="relative flex-grow">

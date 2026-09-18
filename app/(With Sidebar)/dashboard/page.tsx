@@ -362,44 +362,40 @@ export default function DashboardPage() {
       <div className="col-span-12 flex flex-wrap items-center justify-end gap-2">
         <LiveClock />
 
-        {role === "admin" && (
-          <>
-            <Button variant="outline" size="sm" className="h-9 gap-1.5" asChild>
-              <Link href="/rekap-bulanan">
-                <FileSpreadsheet className="size-4 text-blue-600" />
-                Rekap Bulanan
-              </Link>
+        <Button variant="outline" size="sm" className="h-9 gap-1.5" asChild>
+          <Link href="/rekap-bulanan">
+            <FileSpreadsheet className="size-4 text-blue-600" />
+            Rekap Bulanan
+          </Link>
+        </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="h-9 gap-1.5">
+              {exporting ? (
+                <Loader2 className="size-4 animate-spin text-emerald-600" />
+              ) : (
+                <Download className="size-4 text-emerald-600" />
+              )}
+              Export Data
             </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setExportModalOpen(true)}>
+              <FileSpreadsheet className="size-4 text-emerald-600" />
+              Export Excel
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleExportPdf}>
+              <Printer className="size-4 text-rose-600" />
+              Export PDF
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-9 gap-1.5">
-                  {exporting ? (
-                    <Loader2 className="size-4 animate-spin text-emerald-600" />
-                  ) : (
-                    <Download className="size-4 text-emerald-600" />
-                  )}
-                  Export Data
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setExportModalOpen(true)}>
-                  <FileSpreadsheet className="size-4 text-emerald-600" />
-                  Export Excel
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleExportPdf}>
-                  <Printer className="size-4 text-rose-600" />
-                  Export PDF
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <ExportDashboardDialog
-              open={exportModalOpen}
-              onOpenChange={setExportModalOpen}
-            />
-          </>
-        )}
+        <ExportDashboardDialog
+          open={exportModalOpen}
+          onOpenChange={setExportModalOpen}
+        />
       </div>
       {/* SECTION: KPI Cards */}
       {/* SECTION: Aktivitas Terkini */}
