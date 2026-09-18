@@ -49,6 +49,7 @@ const dataDepartment: ComboboxData = [
   { label: "Marketing", value: "Marketing" },
   { label: "Manufacture", value: "Manufacture" },
   { label: "HR", value: "HR" },
+  { label: "HSE", value: "HSE" },
   { label: "K3", value: "K3" },
   { label: "IT", value: "IT" },
   { label: "Finance", value: "Finance" },
@@ -63,6 +64,7 @@ const dataDepartment: ComboboxData = [
 
 const dataProject: ComboboxData = [
   { label: "Design Poster", value: "Design Poster" },
+  { label: "Design Sertifikat", value: "Design Sertifikat" },
   { label: "Design Flyer", value: "Design Flyer" },
   { label: "Design Brosur", value: "Design Brosur" },
   { label: "Design Kemasan", value: "Design Kemasan" },

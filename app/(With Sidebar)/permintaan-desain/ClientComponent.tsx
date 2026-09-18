@@ -29,6 +29,7 @@ import {
   RotateCcw,
   User,
   CheckCircle2,
+  Pencil,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -548,9 +549,18 @@ export default function PermintaanList() {
 
                   {/* Aksi */}
                   <TableCell className="text-right">
-                    <Button variant="outline" size="sm" asChild>
-                      <Link href={`/permintaan-desain/${item.id}`}>Detail</Link>
-                    </Button>
+                    <div className="flex justify-end gap-2">
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/permintaan-desain/${item.id}`}>Detail</Link>
+                      </Button>
+                      {userRole === "admin" && (
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/permintaan-desain/${item.id}/edit`}>
+                            <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
+                          </Link>
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))

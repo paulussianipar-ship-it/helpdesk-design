@@ -44,6 +44,7 @@ interface EditPermintaanDialogProps {
 
 const PROJECT_OPTIONS = [
   "Design Poster",
+  "Design Sertifikat",
   "Design Flyer",
   "Design Brosur",
   "Design Kemasan",
@@ -64,6 +65,7 @@ const PROJECT_OPTIONS = [
 const DEPARTMENT_OPTIONS = [
   "Manufacture",
   "HR",
+  "HSE",
   "K3",
   "IT",
   "Finance",
@@ -104,7 +106,7 @@ export function EditPermintaanDialog({
   useEffect(() => {
     if (item) {
       setJudul(item.judul || "");
-      
+
       // Setup Project
       if (item.project) {
         if (PROJECT_OPTIONS.includes(item.project)) {
