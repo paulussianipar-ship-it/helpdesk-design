@@ -73,7 +73,7 @@ export default function DetailPermintaanPage({
           .from("user_profiles")
           .select("*")
           .eq("id", user.id)
-          .single();
+          .maybeSingle();
         setUserCred(data);
       }
     }
@@ -84,21 +84,29 @@ export default function DetailPermintaanPage({
     if (!id) return;
     async function fetchData() {
       setLoading(true);
-      const { data, error } = await s
-        .from("permintaan")
-        .select("*")
-        .eq("id", id)
-        .single();
-      if (error) {
+      try {
+        const res = await fetch(`/api/permintaan?id=${id}`);
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          throw new Error(errJson.error || `HTTP ${res.status}`);
+        }
+        const json = await res.json();
+        if (json.data) {
+          setPermin(json.data as PermintaanDesain);
+          if (json.data.requester_data) setRequester(json.data.requester_data);
+          if (json.data.admin_data) setAdmin(json.data.admin_data);
+        } else {
+          setPermin(null);
+        }
+      } catch (error: any) {
         toast.error("Gagal mengambil data permintaan: " + error.message);
         setPermin(null);
-      } else {
-        setPermin(data as PermintaanDesain);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
     fetchData();
-  }, [s, id]);
+  }, [id]);
 
   useEffect(() => {
     async function fetchDataUser(userId: string, setUser: Function) {
@@ -106,12 +114,12 @@ export default function DetailPermintaanPage({
         .from("user_profiles")
         .select("*")
         .eq("id", userId)
-        .single();
+        .maybeSingle();
       if (data) setUser(data);
     }
-    if (permin?.requester) fetchDataUser(permin.requester, setRequester);
-    if (permin?.admin) fetchDataUser(permin.admin, setAdmin);
-  }, [s, permin]);
+    if (permin?.requester && !requester) fetchDataUser(permin.requester, setRequester);
+    if (permin?.admin && !admin) fetchDataUser(permin.admin, setAdmin);
+  }, [s, permin, requester, admin]);
 
   const getStatusVariant = (
     status: PermintaanDesain["status"]
@@ -159,7 +167,7 @@ export default function DetailPermintaanPage({
         .from("user_profiles")
         .select("*")
         .eq("id", user.user.id)
-        .single();
+        .maybeSingle();
       if (adminData) setAdmin(adminData);
 
       setPermin({ ...permin, admin: user.user.id, status: "PROGRESS" });

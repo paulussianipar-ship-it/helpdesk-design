@@ -90,11 +90,6 @@ const data = {
       icon: LayoutDashboard,
     },
     {
-      title: "STB HSE",
-      url: "/stb-hse",
-      icon: ShieldCheck,
-    },
-    {
       title: "Permintaan Desain",
       url: "/permintaan-desain",
       icon: FileBox,

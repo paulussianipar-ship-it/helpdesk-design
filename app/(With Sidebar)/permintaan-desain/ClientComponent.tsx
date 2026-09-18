@@ -30,8 +30,19 @@ import {
   User,
   CheckCircle2,
   Pencil,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   useEffect,
@@ -75,6 +86,8 @@ export default function PermintaanList() {
   const [totalItems, setTotalItems] = useState<number>(0);
   const [isExporting, setIsExporting] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [deletingPermintaan, setDeletingPermintaan] = useState<Permintaan | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Filter Params
   const currentPage = Number(searchParams.get("page") || "1");
@@ -105,7 +118,7 @@ export default function PermintaanList() {
           .from("user_profiles")
           .select("role")
           .eq("id", user.id)
-          .single();
+          .maybeSingle();
         setUserRole(profile?.role || "user");
       }
     }
@@ -276,6 +289,34 @@ export default function PermintaanList() {
       toast.error("Gagal export: " + e.message);
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  // 6. Hapus Permintaan (Khusus Admin via API)
+  const handleDeletePermintaan = async () => {
+    if (!deletingPermintaan) return;
+    setIsDeleting(true);
+    try {
+      const {
+        data: { session },
+      } = await s.auth.getSession();
+      const res = await fetch(`/api/permintaan?id=${deletingPermintaan.id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${session?.access_token || ""}`,
+        },
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        throw new Error(json?.error || `HTTP error ${res.status}`);
+      }
+      toast.success("Permintaan desain berhasil dihapus.");
+      setDeletingPermintaan(null);
+      fetchData();
+    } catch (err: any) {
+      toast.error("Gagal menghapus permintaan: " + err.message);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -554,11 +595,21 @@ export default function PermintaanList() {
                         <Link href={`/permintaan-desain/${item.id}`}>Detail</Link>
                       </Button>
                       {userRole === "admin" && (
-                        <Button variant="outline" size="sm" asChild>
-                          <Link href={`/permintaan-desain/${item.id}/edit`}>
-                            <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
-                          </Link>
-                        </Button>
+                        <>
+                          <Button variant="outline" size="sm" asChild>
+                            <Link href={`/permintaan-desain/${item.id}/edit`}>
+                              <Pencil className="mr-1 h-3.5 w-3.5" /> Edit
+                            </Link>
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setDeletingPermintaan(item)}
+                          >
+                            <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete
+                          </Button>
+                        </>
                       )}
                     </div>
                   </TableCell>
@@ -574,6 +625,35 @@ export default function PermintaanList() {
           </TableBody>
         </Table>
       </div>
+
+      {/* CONFIRM DIALOG DELETE */}
+      <AlertDialog
+        open={!!deletingPermintaan}
+        onOpenChange={(open) => {
+          if (!open) setDeletingPermintaan(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hapus Permintaan Desain?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Anda yakin ingin menghapus &quot;{deletingPermintaan?.judul}&quot;?
+              Tindakan ini tidak dapat dibatalkan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeletePermintaan}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Hapus
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* FOOTER & PAGINATION */}
       <div className="mt-4 flex flex-col md:flex-row justify-between items-center gap-4">

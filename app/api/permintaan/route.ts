@@ -18,10 +18,90 @@ function getAdminClient() {
   });
 }
 
+const FAREL_ID = "54e6f310-813b-447b-aac0-9052423440da";
+const PAULUS_ID = "bcfdf89c-d1e2-4602-80aa-005a1beb1d3c";
+
+const cleanJudul = (title: string) => {
+  if (!title) return title;
+  return title
+    .replace(/\s*[-–—]\s*IT[0-9]+/gi, "")
+    .replace(/\s*\(\s*IT[0-9]+\s*\)/gi, "")
+    .replace(/\bIT[0-9]{6,}\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+const cleanDeskripsi = (desc: string) => {
+  if (!desc) return desc;
+  return desc
+    .replace(/\[\s*Tiket:\s*IT[0-9]+\s*\|\s*Prioritas:/gi, "[Prioritas:")
+    .replace(/Referensi Tiket IT Helpdesk:\s*IT[0-9]+/gi, "")
+    .replace(/\[\s*Tiket:\s*IT[0-9]+\s*\]/gi, "")
+    .replace(/\bIT[0-9]{6,}\b/gi, "")
+    .replace(/\n\s*\n/g, "\n")
+    .trim();
+};
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = getAdminClient();
     const { searchParams } = new URL(request.url);
+
+    // 1. Single Ticket by ID
+    const id = searchParams.get("id");
+    if (id) {
+      const { data: item, error } = await supabase
+        .from("permintaan")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      if (!item) {
+        return NextResponse.json({ error: "Data permintaan tidak ditemukan" }, { status: 404 });
+      }
+
+      let adminInfo: any = null;
+      let requesterInfo: any = null;
+
+      if (item.admin) {
+        const { data: a } = await supabase
+          .from("user_profiles")
+          .select("id, name, email, role")
+          .eq("id", item.admin)
+          .maybeSingle();
+        if (a) adminInfo = a;
+        else if (item.admin === FAREL_ID) {
+          adminInfo = { id: FAREL_ID, name: "Farel Ramadhan", role: "admin" };
+        } else if (item.admin === PAULUS_ID) {
+          adminInfo = { id: PAULUS_ID, name: "Paulus Sianipar", role: "admin" };
+        }
+      }
+
+      if (item.requester) {
+        const { data: r } = await supabase
+          .from("user_profiles")
+          .select("id, name, email, role")
+          .eq("id", item.requester)
+          .maybeSingle();
+        if (r) requesterInfo = r;
+      }
+
+      const formatted = {
+        ...item,
+        judul: cleanJudul(item.judul),
+        deskripsi: cleanDeskripsi(item.deskripsi),
+        admin_data: adminInfo,
+        requester_data: requesterInfo,
+        admin_name: adminInfo?.name || (item.admin === FAREL_ID ? "Farel Ramadhan" : item.admin === PAULUS_ID ? "Paulus Sianipar" : "-"),
+        requester_name: requesterInfo?.name || "Pelapor",
+        files: Array.isArray(item.files) ? item.files : [],
+      };
+
+      return NextResponse.json({ data: formatted });
+    }
 
     const page = Math.max(1, Number(searchParams.get("page") || "1"));
     const limit = Math.max(1, Number(searchParams.get("limit") || "10"));
@@ -87,7 +167,7 @@ export async function GET(request: NextRequest) {
       if (item.admin) userIds.add(item.admin);
     });
 
-    let nameMap: Record<string, string> = {};
+    const nameMap: Record<string, string> = {};
     if (userIds.size > 0) {
       const { data: profiles } = await supabase
         .from("user_profiles")
@@ -98,30 +178,6 @@ export async function GET(request: NextRequest) {
         if (p.id && p.name) nameMap[p.id] = p.name;
       });
     }
-
-    const FAREL_ID = "54e6f310-813b-447b-aac0-9052423440da";
-    const PAULUS_ID = "bcfdf89c-d1e2-4602-80aa-005a1beb1d3c";
-
-    const cleanJudul = (title: string) => {
-      if (!title) return title;
-      return title
-        .replace(/\s*[-–—]\s*IT[0-9]+/gi, "")
-        .replace(/\s*\(\s*IT[0-9]+\s*\)/gi, "")
-        .replace(/\bIT[0-9]{6,}\b/gi, "")
-        .replace(/\s+/g, " ")
-        .trim();
-    };
-
-    const cleanDeskripsi = (desc: string) => {
-      if (!desc) return desc;
-      return desc
-        .replace(/\[\s*Tiket:\s*IT[0-9]+\s*\|\s*Prioritas:/gi, "[Prioritas:")
-        .replace(/Referensi Tiket IT Helpdesk:\s*IT[0-9]+/gi, "")
-        .replace(/\[\s*Tiket:\s*IT[0-9]+\s*\]/gi, "")
-        .replace(/\bIT[0-9]{6,}\b/gi, "")
-        .replace(/\n\s*\n/g, "\n")
-        .trim();
-    };
 
     const formattedData = items.map((item) => {
       let adminName = item.admin ? nameMap[item.admin] : "-";
@@ -183,6 +239,54 @@ export async function PATCH(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true, data });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || "Internal server error" }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json({ error: "ID tiket diperlukan" }, { status: 400 });
+    }
+
+    // Admin Guard: hanya role admin yang boleh menghapus
+    const authHeader = request.headers.get("authorization") || "";
+    const token = authHeader.replace(/^Bearer\s+/i, "");
+
+    const supabase = getAdminClient();
+
+    const {
+      data: { user },
+      error: authError,
+    } = token
+      ? await supabase.auth.getUser(token)
+      : { data: { user: null }, error: null };
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { data: profile } = await supabase
+      .from("user_profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (profile?.role !== "admin") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const { error } = await supabase.from("permintaan").delete().eq("id", id);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Internal server error" }, { status: 500 });
   }

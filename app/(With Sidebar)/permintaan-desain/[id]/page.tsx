@@ -169,46 +169,24 @@ export default function DetailPermintaanPage() {
           .from("user_profiles")
           .select("*")
           .eq("id", user.id)
-          .single();
-        setCurrentUser(myProfile);
+          .maybeSingle();
+        setCurrentUser(myProfile || null);
       }
 
-      // 2. Get Detail Permintaan
-      const { data: requestData, error } = await s
-        .from("permintaan")
-        .select("*")
-        .eq("id", id)
-        .single();
-
-      if (error) throw error;
-
-      // 3. Fetch Relations
-      let adminInfo = null;
-      let requesterInfo = null;
-
-      if (requestData.admin) {
-        const { data: a } = await s
-          .from("user_profiles")
-          .select("name, email, role")
-          .eq("id", requestData.admin)
-          .single();
-        if (a) adminInfo = a;
+      // 2. Get Detail Permintaan via API (Bypasses RLS & handles relations safely)
+      const res = await fetch(`/api/permintaan?id=${id}`);
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `HTTP ${res.status}`);
       }
-
-      if (requestData.requester) {
-        const { data: r } = await s
-          .from("user_profiles")
-          .select("name, email, role")
-          .eq("id", requestData.requester)
-          .single();
-        if (r) requesterInfo = r;
+      const json = await res.json();
+      if (!json.data) {
+        throw new Error("Data permintaan tidak ditemukan");
       }
 
       setData({
-        ...requestData,
-        admin_data: adminInfo || undefined,
-        requester_data: requesterInfo || undefined,
-        files: Array.isArray(requestData.files) ? requestData.files : [],
+        ...json.data,
+        files: Array.isArray(json.data.files) ? json.data.files : [],
       });
     } catch (e: any) {
       toast.error("Gagal memuat data: " + e.message);

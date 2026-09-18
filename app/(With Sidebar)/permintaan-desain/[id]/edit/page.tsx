@@ -27,11 +27,9 @@ const dataDepartment: ComboboxData = [
   { label: "Manufacture", value: "Manufacture" },
   { label: "HR", value: "HR" },
   { label: "HSE", value: "HSE" },
-  { label: "K3", value: "K3" },
   { label: "IT", value: "IT" },
   { label: "Finance", value: "Finance" },
-  { label: "Logistik", value: "Logistik" },
-  { label: "Purchasing", value: "Purchasing" },
+  { label: "SCM", value: "SCM" },
   { label: "Warehouse", value: "Warehouse" },
   { label: "Service", value: "Service" },
   { label: "General Manager", value: "General Manager" },
@@ -108,24 +106,35 @@ export default function EditPermintaanDesainPage() {
         const {
           data: { user },
         } = await s.auth.getUser();
-        const { data: profile } = await s
-          .from("user_profiles")
-          .select("role")
-          .eq("id", user?.id)
-          .single();
 
-        if (profile?.role !== "admin") {
+        let isUserAdmin = false;
+        if (user) {
+          const { data: profile } = await s
+            .from("user_profiles")
+            .select("role")
+            .eq("id", user.id)
+            .maybeSingle();
+
+          isUserAdmin = profile?.role === "admin";
+        }
+
+        // Fetch detail permintaan via API (bypasses RLS & safely handles single record)
+        const res = await fetch(`/api/permintaan?id=${id}`);
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          throw new Error(errJson.error || `HTTP ${res.status}`);
+        }
+        const json = await res.json();
+        const item = json.data;
+        if (!item) throw new Error("Data permintaan tidak ditemukan");
+
+        // Izin edit: admin atau pemilik tiket
+        const canEdit = isUserAdmin || (user && item.requester === user.id) || !item.requester;
+        if (!canEdit) {
           setIsAdmin(false);
           return;
         }
         setIsAdmin(true);
-
-        const { data: item, error } = await s
-          .from("permintaan")
-          .select("*")
-          .eq("id", id)
-          .single();
-        if (error) throw error;
 
         setJudul(item.judul || "");
         setDeskripsi(item.deskripsi || "");
