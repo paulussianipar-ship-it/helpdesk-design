@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
+  ArrowUpDown,
   BarChart3,
   Calendar,
   CheckCircle2,
@@ -35,6 +36,7 @@ import {
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { createClient } from "@/lib/supabase/client";
+import { Mounted } from "@/components/mounted";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -106,6 +108,7 @@ export default function ProgramKerjaPage() {
   const [quartalFilter, setQuartalFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [picFilter, setPicFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<"quartal_asc" | "quartal_desc">("quartal_asc");
   const [viewMode, setViewMode] = useState<"table" | "kanban">("table");
 
   // Add / Edit Modal state
@@ -319,7 +322,7 @@ export default function ProgramKerjaPage() {
 
   // Filtered records for active display
   const filteredRecords = useMemo(() => {
-    return yearRecords.filter((rec) => {
+    const filtered = yearRecords.filter((rec) => {
       // Search
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase();
@@ -355,7 +358,16 @@ export default function ProgramKerjaPage() {
 
       return true;
     });
-  }, [yearRecords, searchTerm, quartalFilter, statusFilter, picFilter]);
+
+    // Sort by quartal (1 → 4 or 4 → 1), stable with created_at as tiebreaker
+    const quartalNumber = (quartal: string) => Number(normalizeQuartal(quartal).replace(/\D/g, "")) || 0;
+    return filtered.sort((a, b) => {
+      const diff = quartalNumber(a.quartal) - quartalNumber(b.quartal);
+      const direction = sortBy === "quartal_asc" ? 1 : -1;
+      if (diff !== 0) return diff * direction;
+      return String(a.program_kerja).localeCompare(String(b.program_kerja));
+    });
+  }, [yearRecords, searchTerm, quartalFilter, statusFilter, picFilter, sortBy]);
 
   // Grouped by quartal for kanban / table sections
   const groupedByQuartal = useMemo(() => {
@@ -1039,24 +1051,30 @@ notify pgrst, 'reload schema';`;
           <div className="flex items-center gap-1.5 bg-muted/70 p-1 rounded-xl border">
             <Calendar className="size-4 ml-2 text-muted-foreground" />
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1">Tahun:</span>
-            <Select
-              value={String(selectedYear)}
-              onValueChange={(val) => {
-                setSelectedYear(Number(val));
-                setQuartalFilter("all");
-              }}
+            <Mounted
+              fallback={
+                <div className="w-[110px] h-8 rounded-md border bg-background shadow-2xs" />
+              }
             >
-              <SelectTrigger className="w-[110px] h-8 bg-background font-bold text-sm border shadow-2xs">
-                <SelectValue placeholder="Pilih Tahun" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableYears.map((yr) => (
-                  <SelectItem key={yr} value={String(yr)} className="font-medium">
-                    {yr}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              <Select
+                value={String(selectedYear)}
+                onValueChange={(val) => {
+                  setSelectedYear(Number(val));
+                  setQuartalFilter("all");
+                }}
+              >
+                <SelectTrigger className="w-[110px] h-8 bg-background font-bold text-sm border shadow-2xs">
+                  <SelectValue placeholder="Pilih Tahun" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableYears.map((yr) => (
+                    <SelectItem key={yr} value={String(yr)} className="font-medium">
+                      {yr}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Mounted>
 
             <Button
               variant="ghost"
@@ -1232,10 +1250,18 @@ notify pgrst, 'reload schema';`;
           const isSelected = quartalFilter === q;
 
           return (
-            <button
+            <div
               key={q}
+              role="button"
+              tabIndex={0}
               onClick={() => setQuartalFilter(isSelected ? "all" : q)}
-              className={`p-3 rounded-xl border text-left transition-all ${
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setQuartalFilter(isSelected ? "all" : q);
+                }
+              }}
+              className={`p-3 rounded-xl border text-left cursor-pointer transition-all select-none ${
                 isSelected
                   ? "ring-2 ring-primary bg-primary/5 border-primary"
                   : "bg-card hover:bg-muted/40"
@@ -1257,7 +1283,7 @@ notify pgrst, 'reload schema';`;
                   style={{ width: `${qStat.avgProgress}%` }}
                 />
               </div>
-            </button>
+            </div>
           );
         })}
       </div>
@@ -1286,48 +1312,79 @@ notify pgrst, 'reload schema';`;
         {/* Filter Dropdowns */}
         <div className="flex flex-wrap items-center gap-2">
           {/* Quartal Filter */}
-          <Select value={quartalFilter} onValueChange={setQuartalFilter}>
-            <SelectTrigger className="w-[140px] h-9 text-xs">
-              <SelectValue placeholder="Semua Quartal" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Semua Quartal</SelectItem>
-              <SelectItem value="Quartal 1">Quartal 1</SelectItem>
-              <SelectItem value="Quartal 2">Quartal 2</SelectItem>
-              <SelectItem value="Quartal 3">Quartal 3</SelectItem>
-              <SelectItem value="Quartal 4">Quartal 4</SelectItem>
-            </SelectContent>
-          </Select>
+          <Mounted
+            fallback={<div className="w-[140px] h-9 rounded-md border bg-background" />}
+          >
+            <Select value={quartalFilter} onValueChange={setQuartalFilter}>
+              <SelectTrigger className="w-[140px] h-9 text-xs">
+                <SelectValue placeholder="Semua Quartal" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua Quartal</SelectItem>
+                <SelectItem value="Quartal 1">Quartal 1</SelectItem>
+                <SelectItem value="Quartal 2">Quartal 2</SelectItem>
+                <SelectItem value="Quartal 3">Quartal 3</SelectItem>
+                <SelectItem value="Quartal 4">Quartal 4</SelectItem>
+              </SelectContent>
+            </Select>
+          </Mounted>
 
           {/* Status Filter */}
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[130px] h-9 text-xs">
-              <SelectValue placeholder="Semua Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Semua Status</SelectItem>
-              <SelectItem value="done">Selesai (Done)</SelectItem>
-              <SelectItem value="in_progress">Dalam Proses</SelectItem>
-              <SelectItem value="planned">Planned / Tertunda</SelectItem>
-            </SelectContent>
-          </Select>
+          <Mounted
+            fallback={<div className="w-[130px] h-9 rounded-md border bg-background" />}
+          >
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[130px] h-9 text-xs">
+                <SelectValue placeholder="Semua Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua Status</SelectItem>
+                <SelectItem value="done">Selesai (Done)</SelectItem>
+                <SelectItem value="in_progress">Dalam Proses</SelectItem>
+                <SelectItem value="planned">Planned / Tertunda</SelectItem>
+              </SelectContent>
+            </Select>
+          </Mounted>
 
           {/* PIC Filter */}
           {uniquePics.length > 0 && (
-            <Select value={picFilter} onValueChange={setPicFilter}>
-              <SelectTrigger className="w-[150px] h-9 text-xs">
-                <SelectValue placeholder="Semua PIC" />
+            <Mounted
+              fallback={<div className="w-[150px] h-9 rounded-md border bg-background" />}
+            >
+              <Select value={picFilter} onValueChange={setPicFilter}>
+                <SelectTrigger className="w-[150px] h-9 text-xs">
+                  <SelectValue placeholder="Semua PIC" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua PIC</SelectItem>
+                  {uniquePics.map((p) => (
+                    <SelectItem key={p} value={p}>
+                      {p}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Mounted>
+          )}
+
+          {/* Sort by Quartal */}
+          <Mounted
+            fallback={<div className="w-[170px] h-9 rounded-md border bg-background" />}
+          >
+            <Select
+              value={sortBy}
+              onValueChange={(v) => setSortBy(v as "quartal_asc" | "quartal_desc")}
+            >
+              <SelectTrigger className="w-[170px] h-9 text-xs" title="Urutkan berdasarkan quartal">
+                <ArrowUpDown className="size-3.5 text-muted-foreground shrink-0" />
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Semua PIC</SelectItem>
-                {uniquePics.map((p) => (
-                  <SelectItem key={p} value={p}>
-                    {p}
-                  </SelectItem>
-                ))}
+                <SelectItem value="quartal_asc">Quartal (1 → 4)</SelectItem>
+                <SelectItem value="quartal_desc">Quartal (4 → 1)</SelectItem>
               </SelectContent>
             </Select>
-          )}
+          </Mounted>
 
           {/* Reset Filters */}
           {(searchTerm || quartalFilter !== "all" || statusFilter !== "all" || picFilter !== "all") && (
@@ -1407,22 +1464,60 @@ notify pgrst, 'reload schema';`;
             <Table>
               <TableHeader className="bg-muted/60 sticky top-0 z-10">
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-[140px] font-bold text-foreground">Quartal</TableHead>
-                  <TableHead className="min-w-[220px] font-bold text-foreground">Program Kerja</TableHead>
-                  <TableHead className="min-w-[200px] font-bold text-foreground">Tujuan</TableHead>
-                  <TableHead className="min-w-[200px] font-bold text-foreground">Realisasi</TableHead>
-                  <TableHead className="min-w-[150px] font-bold text-foreground">Realisasi Aktual</TableHead>
-                  <TableHead className="w-[120px] font-bold text-foreground text-center">Status</TableHead>
-                  <TableHead className="w-[120px] font-bold text-foreground text-center">Progress</TableHead>
-                  <TableHead className="min-w-[140px] font-bold text-foreground">PIC</TableHead>
-                  <TableHead className="min-w-[140px] font-bold text-foreground">Deadline</TableHead>
-                  <TableHead className="min-w-[160px] font-bold text-foreground">Risiko / Kendala</TableHead>
-                  <TableHead className="min-w-[160px] font-bold text-foreground">Keterangan</TableHead>
-                  <TableHead className="w-[90px] font-bold text-foreground text-center">Aksi</TableHead>
+                  <TableHead className="w-[140px] min-w-[130px] font-bold text-foreground">Quartal</TableHead>
+                  <TableHead className="min-w-[220px] max-w-[320px] font-bold text-foreground">Program Kerja</TableHead>
+                  <TableHead className="min-w-[200px] max-w-[300px] font-bold text-foreground">Tujuan</TableHead>
+                  <TableHead className="min-w-[200px] max-w-[300px] font-bold text-foreground">Realisasi</TableHead>
+                  <TableHead className="min-w-[160px] max-w-[240px] font-bold text-foreground">Realisasi Aktual</TableHead>
+                  <TableHead className="w-[110px] min-w-[100px] font-bold text-foreground text-center whitespace-nowrap">Status</TableHead>
+                  <TableHead className="w-[110px] min-w-[100px] font-bold text-foreground text-center whitespace-nowrap">Progress</TableHead>
+                  <TableHead className="min-w-[130px] max-w-[180px] font-bold text-foreground">PIC</TableHead>
+                  <TableHead className="min-w-[130px] max-w-[160px] font-bold text-foreground">Deadline</TableHead>
+                  <TableHead className="min-w-[180px] max-w-[260px] font-bold text-foreground">Risiko / Kendala</TableHead>
+                  <TableHead className="min-w-[180px] max-w-[260px] font-bold text-foreground">Keterangan</TableHead>
+                  <TableHead className="w-[80px] min-w-[80px] font-bold text-foreground text-center whitespace-nowrap">Aksi</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredRecords.map((item, index) => {
+                {Object.entries(groupedByQuartal)
+                  .filter(([, items]) => items.length > 0)
+                  .sort((a, b) => {
+                    const ia = CANONICAL_QUARTALS.indexOf(
+                      a[0] as (typeof CANONICAL_QUARTALS)[number],
+                    );
+                    const ib = CANONICAL_QUARTALS.indexOf(
+                      b[0] as (typeof CANONICAL_QUARTALS)[number],
+                    );
+                    return sortBy === "quartal_asc" ? ia - ib : ib - ia;
+                  })
+                  .map(([q, items]) => {
+                    const qColor = getQuartalColor(q);
+                    return (
+                      <Fragment key={q}>
+                        {/* Group Header per Quartal */}
+                        <TableRow className="hover:bg-transparent">
+                          <TableCell colSpan={12} className="bg-muted/60 px-4 py-0 border-y">
+                            <div className="flex items-center justify-between gap-2 py-2.5">
+                              <div className="flex items-center gap-2">
+                                <span className={`size-2.5 rounded-full ${qColor.pill}`} />
+                                <span className="font-bold text-sm text-foreground">{q}</span>
+                                <Badge
+                                  variant="outline"
+                                  className={`text-[10px] px-1.5 py-0 font-semibold ${qColor.badge}`}
+                                >
+                                  {items.length} Proker
+                                </Badge>
+                                {items[0]?.quartal_fokus && (
+                                  <span className="text-[11px] text-muted-foreground italic hidden lg:inline">
+                                    Fokus: {items[0].quartal_fokus}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+
+                        {items.map((item, index) => {
                   const qColor = getQuartalColor(item.quartal);
                   const statusVariant = getStatusBadgeVariant(item.status || item.realisasi_aktual);
 
@@ -1432,13 +1527,13 @@ notify pgrst, 'reload schema';`;
                       className="hover:bg-muted/40 transition-colors group text-xs sm:text-sm"
                     >
                       {/* Quartal */}
-                      <TableCell className="align-top py-3.5">
+                      <TableCell className="align-top py-3.5 w-[140px] min-w-[130px] whitespace-normal">
                         <div className="flex flex-col gap-1">
                           <Badge variant="outline" className={`font-semibold w-fit text-[11px] ${qColor.badge}`}>
                             {item.quartal}
                           </Badge>
                           {item.quartal_fokus && (
-                            <span className="text-[11px] text-muted-foreground italic leading-tight">
+                            <span className="text-[11px] text-muted-foreground italic leading-tight break-words [overflow-wrap:anywhere]">
                               Fokus: {item.quartal_fokus}
                             </span>
                           )}
@@ -1446,29 +1541,29 @@ notify pgrst, 'reload schema';`;
                       </TableCell>
 
                       {/* Program Kerja */}
-                      <TableCell className="align-top py-3.5 font-semibold text-foreground">
-                        <div className="leading-snug">{item.program_kerja}</div>
+                      <TableCell className="align-top py-3.5 font-semibold text-foreground whitespace-normal min-w-[220px] max-w-[320px]">
+                        <div className="leading-snug break-words [overflow-wrap:anywhere]">{item.program_kerja}</div>
                       </TableCell>
 
                       {/* Tujuan */}
-                      <TableCell className="align-top py-3.5 text-muted-foreground leading-relaxed">
-                        {item.tujuan || "-"}
+                      <TableCell className="align-top py-3.5 text-muted-foreground leading-relaxed whitespace-normal min-w-[200px] max-w-[300px]">
+                        <div className="leading-relaxed break-words [overflow-wrap:anywhere]">{item.tujuan || "-"}</div>
                       </TableCell>
 
                       {/* Realisasi */}
-                      <TableCell className="align-top py-3.5 whitespace-pre-line text-muted-foreground leading-relaxed">
-                        {item.realisasi || "-"}
+                      <TableCell className="align-top py-3.5 text-muted-foreground leading-relaxed whitespace-pre-line min-w-[200px] max-w-[300px]">
+                        <div className="leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere]">{item.realisasi || "-"}</div>
                       </TableCell>
 
                       {/* Realisasi Aktual */}
-                      <TableCell className="align-top py-3.5">
-                        <span className="font-medium text-foreground whitespace-pre-line">
+                      <TableCell className="align-top py-3.5 whitespace-normal min-w-[160px] max-w-[240px]">
+                        <div className="font-medium text-foreground whitespace-pre-line break-words [overflow-wrap:anywhere] leading-snug">
                           {item.realisasi_aktual || "-"}
-                        </span>
+                        </div>
                       </TableCell>
 
                       {/* Status */}
-                      <TableCell className="align-top py-3.5 text-center">
+                      <TableCell className="align-top py-3.5 text-center whitespace-nowrap w-[110px] min-w-[100px]">
                         <Badge
                           variant="outline"
                           className={`text-[11px] font-medium px-2 py-0.5 ${statusVariant.bg} ${statusVariant.text} ${statusVariant.border}`}
@@ -1478,7 +1573,7 @@ notify pgrst, 'reload schema';`;
                       </TableCell>
 
                       {/* Progress */}
-                      <TableCell className="align-top py-3.5 text-center">
+                      <TableCell className="align-top py-3.5 text-center whitespace-nowrap w-[110px] min-w-[100px]">
                         <div className="flex flex-col items-center gap-1">
                           <span className="font-bold text-xs">{item.progress}%</span>
                           <div className="w-16 bg-muted rounded-full h-1.5 overflow-hidden">
@@ -1499,18 +1594,18 @@ notify pgrst, 'reload schema';`;
                       </TableCell>
 
                       {/* PIC */}
-                      <TableCell className="align-top py-3.5">
-                        <span className="inline-flex items-center gap-1 font-medium text-xs bg-muted/60 px-2 py-0.5 rounded-md">
-                          <UserCheck className="size-3 text-muted-foreground" />
-                          {item.pic || "Designer"}
+                      <TableCell className="align-top py-3.5 whitespace-normal min-w-[130px] max-w-[180px]">
+                        <span className="inline-flex items-center gap-1 font-medium text-xs bg-muted/60 px-2 py-1 rounded-md break-words [overflow-wrap:anywhere] leading-tight">
+                          <UserCheck className="size-3 text-muted-foreground shrink-0" />
+                          <span>{item.pic || "Designer"}</span>
                         </span>
                       </TableCell>
 
                       {/* Deadline */}
-                      <TableCell className="align-top py-3.5 text-xs text-muted-foreground">
+                      <TableCell className="align-top py-3.5 text-xs text-muted-foreground whitespace-normal min-w-[130px] max-w-[160px]">
                         {item.deadline ? (
-                          <div className="flex items-center gap-1 font-medium">
-                            <Clock className="size-3 shrink-0 text-primary" />
+                          <div className="flex items-start gap-1 font-medium leading-snug break-words [overflow-wrap:anywhere]">
+                            <Clock className="size-3 shrink-0 text-primary mt-0.5" />
                             <span>{item.deadline}</span>
                           </div>
                         ) : (
@@ -1519,23 +1614,23 @@ notify pgrst, 'reload schema';`;
                       </TableCell>
 
                       {/* Risiko / Kendala */}
-                      <TableCell className="align-top py-3.5 text-xs">
+                      <TableCell className="align-top py-3.5 text-xs whitespace-normal min-w-[180px] max-w-[260px]">
                         {item.risiko_kendala ? (
-                          <span className="text-rose-600 dark:text-rose-400 font-medium">
+                          <div className="text-rose-600 dark:text-rose-400 font-medium leading-relaxed break-words [overflow-wrap:anywhere]">
                             {item.risiko_kendala}
-                          </span>
+                          </div>
                         ) : (
                           <span className="text-muted-foreground">-</span>
                         )}
                       </TableCell>
 
                       {/* Keterangan */}
-                      <TableCell className="align-top py-3.5 text-xs text-muted-foreground">
-                        {item.keterangan || "-"}
+                      <TableCell className="align-top py-3.5 text-xs text-muted-foreground whitespace-normal min-w-[180px] max-w-[260px]">
+                        <div className="leading-relaxed break-words [overflow-wrap:anywhere]">{item.keterangan || "-"}</div>
                       </TableCell>
 
                       {/* Aksi */}
-                      <TableCell className="align-top py-3.5 text-center">
+                      <TableCell className="align-top py-3.5 text-center whitespace-nowrap w-[80px] min-w-[80px]">
                         <div className="flex items-center justify-center gap-1">
                           <Button
                             variant="ghost"
@@ -1558,8 +1653,11 @@ notify pgrst, 'reload schema';`;
                         </div>
                       </TableCell>
                     </TableRow>
-                  );
-                })}
+                        );
+                      })}
+                      </Fragment>
+                    );
+                  })}
               </TableBody>
             </Table>
           </div>
@@ -1773,21 +1871,21 @@ notify pgrst, 'reload schema';`;
                 <Table>
                   <TableHeader className="bg-muted text-[11px]">
                     <TableRow>
-                      <TableHead>Quartal</TableHead>
-                      <TableHead>Program Kerja</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Progress</TableHead>
-                      <TableHead>PIC</TableHead>
+                      <TableHead className="w-[100px] min-w-[90px]">Quartal</TableHead>
+                      <TableHead className="min-w-[180px]">Program Kerja</TableHead>
+                      <TableHead className="w-[100px] text-center whitespace-nowrap">Status</TableHead>
+                      <TableHead className="w-[80px] text-center whitespace-nowrap">Progress</TableHead>
+                      <TableHead className="min-w-[120px]">PIC</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody className="text-xs">
                     {importPreviewRows.slice(0, 5).map((row, idx) => (
                       <TableRow key={idx}>
-                        <TableCell className="font-semibold">{row.quartal}</TableCell>
-                        <TableCell>{row.program_kerja}</TableCell>
-                        <TableCell>{row.status}</TableCell>
-                        <TableCell className="font-bold">{row.progress}%</TableCell>
-                        <TableCell>{row.pic}</TableCell>
+                        <TableCell className="font-semibold align-top whitespace-normal break-words">{row.quartal}</TableCell>
+                        <TableCell className="align-top whitespace-normal break-words [overflow-wrap:anywhere]">{row.program_kerja}</TableCell>
+                        <TableCell className="align-top text-center whitespace-nowrap">{row.status}</TableCell>
+                        <TableCell className="align-top text-center font-bold whitespace-nowrap">{row.progress}%</TableCell>
+                        <TableCell className="align-top whitespace-normal break-words [overflow-wrap:anywhere]">{row.pic}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

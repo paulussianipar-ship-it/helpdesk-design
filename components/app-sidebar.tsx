@@ -24,6 +24,7 @@ import {
   CalendarCheck2,
   UserCheck,
   FolderKanban,
+  ShieldCheck,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -50,6 +51,11 @@ const data = {
       title: "Daily Activity",
       url: "/daily-activity",
       icon: CalendarCheck2,
+    },
+    {
+      title: "STB HSE",
+      url: "/stb-hse",
+      icon: ShieldCheck,
     },
     {
       title: "Program Kerja",
@@ -84,9 +90,9 @@ const data = {
       icon: LayoutDashboard,
     },
     {
-      title: "Program Kerja",
-      url: "/program-kerja",
-      icon: FolderKanban,
+      title: "STB HSE",
+      url: "/stb-hse",
+      icon: ShieldCheck,
     },
     {
       title: "Permintaan Desain",

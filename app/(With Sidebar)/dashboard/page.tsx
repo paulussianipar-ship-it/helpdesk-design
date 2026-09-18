@@ -15,6 +15,13 @@ import { startOfDay, startOfWeek, startOfMonth, endOfMonth } from "date-fns";
 
 // Components
 import { Content } from "@/components/content";
+import { LiveClock } from "@/components/live-clock";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -25,6 +32,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { exportRekapExcel } from "@/lib/rekap-bulanan";
 
 // Icons
 import {
@@ -41,6 +50,9 @@ import {
   Newspaper,
   FileCheck2,
   FileClock,
+  FileSpreadsheet,
+  Download,
+  Printer,
 } from "lucide-react";
 
 // Interfaces
@@ -103,6 +115,7 @@ export default function DashboardPage() {
   const [artikelPopuler, setArtikelPopuler] = useState<ArtikelPopuler[]>([]);
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     async function fetchDashboardData() {
@@ -319,8 +332,64 @@ export default function DashboardPage() {
 
   const renderLoading = () => <Loader2 className="h-6 w-6 animate-spin" />;
 
+  const getCurrentPeriod = () => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  };
+
+  const handleExportExcel = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const fileName = await exportRekapExcel(getCurrentPeriod());
+      toast.success(`Berhasil mengekspor ${fileName}`);
+    } catch (error: any) {
+      toast.error("Gagal mengekspor Excel: " + (error?.message || ""));
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportPdf = () => {
+    window.location.href = "/rekap-bulanan?print=1";
+  };
+
   return (
     <>
+      {/* SECTION: Toolbar Atas (Tanggal/Jam, Rekap Bulanan, Export) */}
+      <div className="col-span-12 flex flex-wrap items-center justify-end gap-2">
+        <LiveClock />
+
+        <Button variant="outline" size="sm" className="h-9 gap-1.5" asChild>
+          <Link href="/rekap-bulanan">
+            <FileSpreadsheet className="size-4 text-blue-600" />
+            Rekap Bulanan
+          </Link>
+        </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="h-9 gap-1.5">
+              {exporting ? (
+                <Loader2 className="size-4 animate-spin text-emerald-600" />
+              ) : (
+                <Download className="size-4 text-emerald-600" />
+              )}
+              Export Data
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={handleExportExcel}>
+              <FileSpreadsheet className="size-4 text-emerald-600" />
+              Export Excel
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleExportPdf}>
+              <Printer className="size-4 text-rose-600" />
+              Export PDF
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
       {/* SECTION: KPI Cards */}
       {/* SECTION: Aktivitas Terkini */}
       <Content
@@ -542,7 +611,7 @@ export default function DashboardPage() {
         </>
       )}
 
-      {/* SECTION: Extra Stats (Rating) - Only Admin often cares about average rating */}
+      {/* SECTION: Rata-rata Rating */}
       {role === "admin" && (
         <Content
           size="md"
