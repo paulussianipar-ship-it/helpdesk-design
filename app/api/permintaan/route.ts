@@ -149,3 +149,41 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: err.message || "Internal server error" }, { status: 500 });
   }
 }
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const supabase = getAdminClient();
+    const body = await request.json();
+    const { id, judul, project, departemen, status, due_date, deskripsi, admin } = body;
+
+    if (!id) {
+      return NextResponse.json({ error: "ID tiket diperlukan" }, { status: 400 });
+    }
+
+    const updates: Record<string, any> = {
+      updated_at: new Date().toISOString(),
+    };
+    if (judul !== undefined) updates.judul = judul.trim();
+    if (project !== undefined) updates.project = project;
+    if (departemen !== undefined) updates.departemen = departemen;
+    if (status !== undefined) updates.status = status;
+    if (due_date !== undefined) updates.due_date = due_date;
+    if (deskripsi !== undefined) updates.deskripsi = deskripsi;
+    if (admin !== undefined) updates.admin = admin;
+
+    const { data, error } = await supabase
+      .from("permintaan")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, data });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || "Internal server error" }, { status: 500 });
+  }
+}

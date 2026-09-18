@@ -21,19 +21,28 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { createClient } from "@/lib/supabase/client";
-import { Loader2, Newspaper, Search } from "lucide-react";
+import { Loader2, Newspaper, Search, Pencil } from "lucide-react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useCallback, useTransition } from "react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx"; // Impor library Excel
+import { EditPermintaanDialog } from "@/components/edit-permintaan-dialog";
 
 // Definisikan tipe data untuk konsistensi
 interface Permintaan {
   id: string;
   judul: string;
-  status: "PROGRESS" | "REVISION" | "REVIEW" | "DONE";
+  status: "TO DO" | "PROGRESS" | "REVISION" | "REVIEW" | "DONE" | string;
   due_date: string;
   created_at: string;
+  project?: string;
+  departemen?: string;
+  admin?: string | null;
+  admin_name?: string;
+  deskripsi?: string;
+  requester?: string;
+  requester_name?: string;
 }
 
 // Tipe data untuk ekspor Excel yang lebih lengkap
@@ -82,6 +91,15 @@ export function PermintaanAdminClientContent() {
 
   // State Realtime
   const [isRealtimeConnected, setIsRealtimeConnected] = useState<boolean>(true);
+
+  // State Dialog Edit
+  const [editingItem, setEditingItem] = useState<Permintaan | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState<boolean>(false);
+
+  const handleOpenEdit = (item: Permintaan) => {
+    setEditingItem(item);
+    setIsEditDialogOpen(true);
+  };
 
   const createQueryString = useCallback(
     (paramsToUpdate: Record<string, string | number | undefined>) => {
@@ -425,11 +443,22 @@ export function PermintaanAdminClientContent() {
                     })}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="outline" size="sm" asChild>
-                      <a href={`/permintaan-desain-admin/${permintaan.id}`}>
-                        Lihat Detail
-                      </a>
-                    </Button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-2.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40"
+                        onClick={() => handleOpenEdit(permintaan)}
+                      >
+                        <Pencil className="h-3.5 w-3.5 mr-1" />
+                        Edit
+                      </Button>
+                      <Button variant="outline" size="sm" className="h-8 px-2.5" asChild>
+                        <Link href={`/permintaan-desain-admin/${permintaan.id}`}>
+                          Lihat Detail
+                        </Link>
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -471,6 +500,14 @@ export function PermintaanAdminClientContent() {
           itemsPerPage={limit}
         />
       </div>
+
+      {/* DIALOG EDIT PERMINTAAN ADMIN */}
+      <EditPermintaanDialog
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        item={editingItem}
+        onSuccess={fetchPermintaan}
+      />
     </Content>
   );
 }

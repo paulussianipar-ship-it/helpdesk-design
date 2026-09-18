@@ -29,6 +29,7 @@ import {
   RotateCcw,
   User,
   CheckCircle2,
+  Pencil,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -40,6 +41,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
+import { EditPermintaanDialog } from "@/components/edit-permintaan-dialog";
 
 interface Permintaan {
   id: string;
@@ -91,6 +93,15 @@ export default function PermintaanList() {
 
   // State Realtime
   const [isRealtimeConnected, setIsRealtimeConnected] = useState<boolean>(true);
+
+  // State Dialog Edit
+  const [editingItem, setEditingItem] = useState<Permintaan | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState<boolean>(false);
+
+  const handleOpenEdit = (item: Permintaan) => {
+    setEditingItem(item);
+    setIsEditDialogOpen(true);
+  };
 
   // 1. Cek User & Role
   useEffect(() => {
@@ -548,9 +559,20 @@ export default function PermintaanList() {
 
                   {/* Aksi */}
                   <TableCell className="text-right">
-                    <Button variant="outline" size="sm" asChild>
-                      <Link href={`/permintaan-desain/${item.id}`}>Detail</Link>
-                    </Button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-2.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/40"
+                        onClick={() => handleOpenEdit(item)}
+                      >
+                        <Pencil className="h-3.5 w-3.5 mr-1" />
+                        Edit
+                      </Button>
+                      <Button variant="outline" size="sm" className="h-8 px-2.5" asChild>
+                        <Link href={`/permintaan-desain/${item.id}`}>Detail</Link>
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -596,6 +618,14 @@ export default function PermintaanList() {
           />
         )}
       </div>
+
+      {/* DIALOG EDIT PERMINTAAN */}
+      <EditPermintaanDialog
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        item={editingItem}
+        onSuccess={fetchData}
+      />
     </Content>
   );
 }
