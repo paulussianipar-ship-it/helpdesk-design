@@ -39,9 +39,11 @@ const dataDepartment: ComboboxData = [
 
 const dataProject: ComboboxData = [
   { label: "Design Poster", value: "Design Poster" },
+  { label: "Design Compro", value: "Design Compro" },
   { label: "Design Sertifikat", value: "Design Sertifikat" },
   { label: "Design Flyer", value: "Design Flyer" },
   { label: "Design Brosur", value: "Design Brosur" },
+  { label: "Design Banner", value: "Design Banner" },
   { label: "Design Kemasan", value: "Design Kemasan" },
   { label: "Design Catalog", value: "Design Catalog" },
   { label: "Design Mini Catalog", value: "Design Mini Catalog" },
@@ -50,7 +52,10 @@ const dataProject: ComboboxData = [
   { label: "Design Stiker", value: "Design Stiker" },
   { label: "Design Kartu Nama", value: "Design Kartu Nama" },
   { label: "Design Buku", value: "Design Buku" },
+  { label: "Design Tagging", value: "Design Tagging" },
   { label: "Design Template", value: "Design Template" },
+  { label: "Design Seragam", value: "Design Seragam" },
+  { label: "Photo Event", value: "Photo Event" },
   { label: "Photo Editing", value: "Photo Editing" },
   { label: "Photo Product", value: "Photo Product" },
   { label: "Photo Instalasi", value: "Photo Instalasi" },
