@@ -1057,7 +1057,7 @@ export default function DailyActivityPage() {
 
       {/* Navigasi Pemilih Bulan (Monthly Switcher) - Aligned with Attendance */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-card border rounded-xl p-4 shadow-xs">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center rounded-lg border bg-muted/30 p-1">
             <Button
               variant="ghost"
@@ -1090,7 +1090,7 @@ export default function DailyActivityPage() {
           </div>
 
           {/* Dropdown Pemilih Periode Bulan */}
-          <div className="w-[190px]">
+          <div className="w-full sm:w-[190px]">
             <Select
               value={selectedMonth}
               onValueChange={(val) => {

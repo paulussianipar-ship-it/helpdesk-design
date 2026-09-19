@@ -474,7 +474,7 @@ export function PermintaanAdminClientContent() {
       </div>
 
       <div className="mt-6 flex flex-col md:flex-row justify-between items-center gap-4">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <span>Tampilkan</span>
           <Select
             value={String(limit)}

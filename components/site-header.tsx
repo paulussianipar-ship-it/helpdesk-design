@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { ThemeSwitcher } from "@/components/theme-switcher";
+import { SiteMobileNav } from "@/components/site-mobile-nav";
 import { Palette } from "lucide-react";
 
 export function SiteHeader() {
@@ -35,6 +36,13 @@ export function SiteHeader() {
           <Button variant="ghost" size="sm" asChild>
             <a href="/auth/login">Masuk</a>
           </Button>
+          <SiteMobileNav
+            links={[
+              { label: "Fitur Unggulan", href: "/#features" },
+              { label: "Cara Kerja", href: "/#how-it-works" },
+              { label: "Artikel", href: "/artikel" },
+            ]}
+          />
         </div>
       </div>
     </header>

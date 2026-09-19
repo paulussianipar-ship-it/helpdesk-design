@@ -342,7 +342,7 @@ export function EditPermintaanDialog({
             />
           </div>
 
-          <DialogFooter className="pt-3 flex items-center justify-end gap-2 border-t mt-4">
+          <DialogFooter className="pt-3 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 border-t mt-4">
             <Button
               type="button"
               variant="outline"

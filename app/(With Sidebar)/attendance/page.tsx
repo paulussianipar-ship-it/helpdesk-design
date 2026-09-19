@@ -999,7 +999,7 @@ notify pgrst, 'reload schema';`;
       {/* Navigasi Pemilih Bulan (Monthly Switcher) */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-card border rounded-xl p-4 shadow-xs">
         {/* Kontrol Bulan Sebelumnya / Berikutnya */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center rounded-lg border bg-muted/30 p-1">
             <Button
               variant="ghost"
@@ -1032,7 +1032,7 @@ notify pgrst, 'reload schema';`;
           </div>
 
           {/* Dropdown Pemilih Periode Bulan */}
-          <div className="w-[190px]">
+          <div className="w-full sm:w-[190px]">
             <Select
               value={selectedMonth}
               onValueChange={(val) => {

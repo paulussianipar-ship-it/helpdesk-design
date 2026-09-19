@@ -27,7 +27,15 @@ import {
   STATUS_LABEL,
   formatDateID,
 } from "@/lib/articles";
-import { Eye, Loader2, Plus, Search, Star } from "lucide-react";
+import {
+  Loader2,
+  Plus,
+  Search,
+  Star,
+  Eye,
+  Calendar,
+  Tag,
+} from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useCallback, useTransition } from "react";
 import { toast } from "sonner";
@@ -45,6 +53,100 @@ const statusVariant: Record<ArticleStatus, "default" | "secondary" | "outline"> 
     draft: "secondary",
     archived: "outline",
   };
+
+function ArticleCardSkeleton() {
+  return (
+    <div className="border rounded-lg p-4 space-y-3 animate-pulse">
+      <div className="flex items-center justify-between">
+        <div className="h-5 w-3/4 bg-muted rounded" />
+        <div className="h-5 w-20 bg-muted rounded" />
+      </div>
+      <div className="h-6 w-full bg-muted rounded" />
+      <div className="h-4 w-5/6 bg-muted rounded" />
+      <div className="h-4 w-4/6 bg-muted rounded" />
+      <div className="flex gap-1">
+        <div className="h-5 w-16 bg-muted rounded-full" />
+        <div className="h-5 w-16 bg-muted rounded-full" />
+      </div>
+      <div className="h-4 w-24 bg-muted rounded" />
+      <div className="flex justify-end gap-2 pt-2 border-t">
+        <div className="h-8 w-20 bg-muted rounded" />
+        <div className="h-8 w-20 bg-muted rounded" />
+      </div>
+    </div>
+  );
+}
+
+interface ArticleCardProps {
+  article: ArticleRow;
+  isAdmin: boolean;
+}
+
+function ArticleCard({ article, isAdmin }: ArticleCardProps) {
+  return (
+    <div className="border rounded-lg p-4 space-y-3 flex flex-col h-full">
+      <div className="flex items-start justify-between gap-2">
+        <Badge variant={statusVariant[article.status]} className="shrink-0">
+          {STATUS_LABEL[article.status]}
+        </Badge>
+        {article.featured && (
+          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400 shrink-0" />
+        )}
+      </div>
+      <h3 className="font-semibold line-clamp-2 text-lg">
+        <a
+          href={`/artikel/${article.slug}`}
+          target="_blank"
+          rel="noreferrer"
+          className="hover:text-primary transition-colors hover:underline"
+        >
+          {article.title}
+        </a>
+      </h3>
+      {article.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {article.tags.slice(0, 3).map((tag) => (
+            <Badge key={tag} variant="outline" className="text-xs">
+              {tag}
+            </Badge>
+          ))}
+          {article.tags.length > 3 && (
+            <span className="text-xs text-muted-foreground">
+              +{article.tags.length - 3}
+            </span>
+          )}
+        </div>
+      )}
+      <div className="flex items-center gap-1 text-xs text-muted-foreground mt-auto">
+        <Calendar className="h-3.5 w-3.5" />
+        <span>{formatDateID(article.published_at || article.created_at)}</span>
+      </div>
+      <div className="flex items-center justify-end gap-2 pt-2 border-t">
+        {article.slug && (
+          <Button
+            variant={isAdmin ? "ghost" : "default"}
+            size="sm"
+            asChild
+          >
+            <a
+              href={`/artikel/${article.slug}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <Eye className="mr-1.5 h-3.5 w-3.5" />
+              Lihat
+            </a>
+          </Button>
+        )}
+        {isAdmin && (
+          <Button variant="outline" size="sm" asChild>
+            <a href={`/artikel-admin/${article.id}`}>Edit</a>
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function ArtikelAdminClientContent() {
   const s = createClient();
@@ -201,109 +303,28 @@ export function ArtikelAdminClientContent() {
         )}
       </div>
 
-      <div className="border rounded-md">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[50px]">No</TableHead>
-              <TableHead>Judul</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="hidden md:table-cell">Tag</TableHead>
-              <TableHead className="hidden lg:table-cell">Tanggal</TableHead>
-              <TableHead className="text-right">Aksi</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {loading || isPending ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center h-24">
-                  <div className="flex justify-center items-center gap-2">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    Memuat data…
-                  </div>
-                </TableCell>
-              </TableRow>
+              Array.from({ length: 8 }).map((_, i) => (
+                <ArticleCardSkeleton key={i} />
+              ))
             ) : articles.length > 0 ? (
-              articles.map((article, index) => (
-                <TableRow key={article.id}>
-                  <TableCell className="font-medium">
-                    {(currentPage - 1) * limit + index + 1}
-                  </TableCell>
-                  <TableCell className="font-semibold">
-                    <a
-                      href={`/artikel/${article.slug}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-1.5 hover:text-primary transition-colors hover:underline"
-                    >
-                      {article.featured && (
-                        <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400 shrink-0" />
-                      )}
-                      <span>{article.title}</span>
-                    </a>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={statusVariant[article.status]}>
-                      {STATUS_LABEL[article.status]}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    <div className="flex flex-wrap gap-1">
-                      {article.tags.slice(0, 3).map((tag) => (
-                        <Badge key={tag} variant="outline" className="text-xs">
-                          {tag}
-                        </Badge>
-                      ))}
-                      {article.tags.length > 3 && (
-                        <span className="text-xs text-muted-foreground">
-                          +{article.tags.length - 3}
-                        </span>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="hidden lg:table-cell text-muted-foreground">
-                    {formatDateID(article.published_at || article.created_at)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      {article.slug && (
-                        <Button
-                          variant={isAdmin ? "ghost" : "default"}
-                          size="sm"
-                          asChild
-                        >
-                          <a
-                            href={`/artikel/${article.slug}`}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            <Eye className="mr-1.5 h-3.5 w-3.5" />
-                            Lihat
-                          </a>
-                        </Button>
-                      )}
-                      {isAdmin && (
-                        <Button variant="outline" size="sm" asChild>
-                          <a href={`/artikel-admin/${article.id}`}>Edit</a>
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
+              articles.map((article) => (
+                <ArticleCard
+                  key={article.id}
+                  article={article}
+                  isAdmin={isAdmin}
+                />
               ))
             ) : (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center h-24">
-                  Belum ada artikel.
-                </TableCell>
-              </TableRow>
+              <div className="col-span-full text-center py-12 text-muted-foreground">
+                Belum ada artikel.
+              </div>
             )}
-          </TableBody>
-        </Table>
-      </div>
+          </div>
 
-      <div className="mt-6 flex flex-col md:flex-row justify-between items-center gap-4">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="mt-6 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <span>Tampilkan</span>
           <Select
             value={String(limit)}

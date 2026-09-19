@@ -1861,14 +1861,16 @@ notify pgrst, 'reload schema';`;
 
             {/* Preview Table */}
             <div>
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                 <span className="text-xs font-semibold text-foreground">
                   Preview Data ({importPreviewRows.length} baris terbaca):
                 </span>
                 <span className="text-xs text-muted-foreground">Menampilkan 5 baris pertama</span>
               </div>
-              <div className="border rounded-xl overflow-hidden max-h-60 overflow-y-auto">
-                <Table>
+              <div className="border rounded-xl overflow-hidden max-h-60">
+                <div className="max-h-60 overflow-y-auto">
+                  <div className="overflow-x-auto">
+                    <Table>
                   <TableHeader className="bg-muted text-[11px]">
                     <TableRow>
                       <TableHead className="w-[100px] min-w-[90px]">Quartal</TableHead>
@@ -1890,6 +1892,8 @@ notify pgrst, 'reload schema';`;
                     ))}
                   </TableBody>
                 </Table>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

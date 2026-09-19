@@ -211,13 +211,13 @@ export default function EditUserPage({
               {initials}
             </AvatarFallback>
           </Avatar>
-          <div className="space-y-1">
-            <h2 className="text-lg font-bold text-foreground leading-none">{name || user.email}</h2>
+          <div className="min-w-0 space-y-1">
+            <h2 className="text-lg font-bold text-foreground leading-none truncate">{name || user.email}</h2>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Mail className="h-3.5 w-3.5" />
-              {user.email}
+              <Mail className="h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0 truncate">{user.email}</span>
             </div>
-            <p className="text-xs text-muted-foreground font-mono">ID: {user.id}</p>
+            <p className="text-xs text-muted-foreground font-mono truncate">ID: {user.id}</p>
           </div>
         </div>
 

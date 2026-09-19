@@ -338,7 +338,7 @@ export default function PermintaanList() {
       description={`Menampilkan ${totalItems} tiket permintaan desain riil terintegrasi.`}
       size="lg"
       cardAction={
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Live Real-Time Badge */}
           <Badge
             variant="outline"
@@ -657,7 +657,7 @@ export default function PermintaanList() {
 
       {/* FOOTER & PAGINATION */}
       <div className="mt-4 flex flex-col md:flex-row justify-between items-center gap-4">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <span>Tampilkan</span>
           <Select
             value={String(limit)}

@@ -765,7 +765,7 @@ export function RekapBulananPage() {
 
       {/* ==================== TABEL REKAP BULANAN TERPADU ==================== */}
       <div className="bg-card border rounded-xl shadow-xs overflow-hidden">
-        <div className="px-4 py-3 border-b flex items-center justify-between">
+        <div className="px-4 py-3 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <h2 className="font-bold text-sm text-foreground">
             Tabel Rekap 12 Bulan Terintegrasi 4 Modul
           </h2>
@@ -918,7 +918,7 @@ export function RekapBulananPage() {
             Rincian Khusus per Modul
           </div>
 
-          <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg text-xs">
+          <div className="flex flex-wrap items-center gap-1 bg-muted/60 p-1 rounded-lg text-xs">
             <button
               onClick={() => setActiveDetailTab("permintaan")}
               className={`px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${

@@ -603,17 +603,17 @@ export default function DetailPermintaanPage() {
 
           {/* CARD DETAIL UTAMA */}
           <div className="border rounded-lg p-6 bg-card shadow-sm space-y-4">
-            <div className="flex justify-between items-start">
-              <div>
-                <h2 className="text-2xl font-bold">{data.judul}</h2>
-                <div className="flex items-center gap-2 mt-1">
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-start">
+              <div className="min-w-0">
+                <h2 className="text-2xl font-bold break-words">{data.judul}</h2>
+                <div className="flex flex-wrap items-center gap-2 mt-1">
                   <Badge variant="outline">{data.project}</Badge>
                   {data.departemen && (
                     <Badge variant="secondary">{data.departemen}</Badge>
                   )}
                 </div>
               </div>
-              {getStatusBadge(data.status)}
+              <div>{getStatusBadge(data.status)}</div>
             </div>
 
             <Separator />

@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Check, Palette, Rocket, Users, ArrowRight } from "lucide-react"; // Menambahkan ArrowRight
 import Image from "next/image";
 import { ThemeSwitcher } from "@/components/theme-switcher";
+import { SiteMobileNav } from "@/components/site-mobile-nav";
 
 export default function LandingPageV3() {
   return (
@@ -52,6 +53,14 @@ export default function LandingPageV3() {
             <Button variant="ghost" size="sm" asChild>
               <a href="/auth/login">Masuk</a>
             </Button>
+            <SiteMobileNav
+              links={[
+                { label: "Fitur Unggulan", href: "#features" },
+                { label: "Cara Kerja", href: "#how-it-works" },
+                { label: "Kata Mereka", href: "#testimonials" },
+                { label: "Artikel", href: "/artikel" },
+              ]}
+            />
           </div>
         </div>
       </header>

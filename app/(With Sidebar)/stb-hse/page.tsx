@@ -1071,7 +1071,7 @@ notify pgrst, 'reload schema';`;
       {/* ==================== 2. PERIOD SELECTOR & SEARCH BAR ==================== */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-muted/40 p-3 rounded-2xl border">
         {/* Month & Year Controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="ghost"
             size="icon"
@@ -1693,7 +1693,7 @@ notify pgrst, 'reload schema';`;
 
             <div className="space-y-1.5">
               <Label>Pilih Hari dalam Seminggu</Label>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {[
                   { id: 1, name: "Senin" },
                   { id: 2, name: "Selasa" },
