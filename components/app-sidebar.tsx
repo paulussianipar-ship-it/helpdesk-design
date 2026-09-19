@@ -99,6 +99,11 @@ const data = {
       url: "/riwayat",
       icon: Clock,
     },
+    {
+      title: "Artikel",
+      url: "/artikel-admin",
+      icon: Newspaper,
+    },
   ],
   navSecondary: [
     {

@@ -34,7 +34,7 @@ import { toast } from "sonner";
 
 type ArticleRow = Pick<
   Article,
-  "id" | "title" | "status" | "tags" | "featured" | "created_at" | "published_at"
+  "id" | "title" | "slug" | "status" | "tags" | "featured" | "created_at" | "published_at"
 >;
 
 const LIMIT_OPTIONS = [10, 25, 50, 100];
@@ -88,7 +88,7 @@ export function ArtikelAdminClientContent() {
       let query = s
         .from("articles")
         .select(
-          `id, title, status, tags, featured, created_at, published_at`,
+          `id, title, slug, status, tags, featured, created_at, published_at`,
           { count: "exact" }
         );
 
@@ -232,9 +232,18 @@ export function ArtikelAdminClientContent() {
                     {formatDateID(article.published_at || article.created_at)}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="outline" size="sm" asChild>
-                      <a href={`/artikel-admin/${article.id}`}>Edit</a>
-                    </Button>
+                    <div className="flex items-center justify-end gap-2">
+                      {article.slug && (
+                        <Button variant="ghost" size="sm" asChild>
+                          <a href={`/artikel/${article.slug}`} target="_blank" rel="noreferrer">
+                            Lihat
+                          </a>
+                        </Button>
+                      )}
+                      <Button variant="outline" size="sm" asChild>
+                        <a href={`/artikel-admin/${article.id}`}>Edit</a>
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
