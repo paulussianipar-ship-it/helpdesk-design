@@ -470,7 +470,7 @@ export default function DashboardPage() {
                       )}
                     </TableCell>
                     <TableCell>{req.requester}</TableCell>
-                    <TableCell>{req.admin || "-"}</TableCell>{" "}
+                    <TableCell>{req.admin || "-"}</TableCell>
                     <TableCell>
                       <Badge
                         variant={
