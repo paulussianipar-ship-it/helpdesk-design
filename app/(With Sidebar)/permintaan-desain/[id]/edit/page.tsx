@@ -48,12 +48,16 @@ const dataProject: ComboboxData = [
   { label: "Design File Presentasi", value: "Design File Presentasi" },
   { label: "Design Label", value: "Design Label" },
   { label: "Design Stiker", value: "Design Stiker" },
-  { label: "Photo Event", value: "Photo Event" },
+  { label: "Design Kartu Nama", value: "Design Kartu Nama" },
+  { label: "Design Buku", value: "Design Buku" },
+  { label: "Design Template", value: "Design Template" },
+  { label: "Photo Editing", value: "Photo Editing" },
   { label: "Photo Product", value: "Photo Product" },
   { label: "Photo Instalasi", value: "Photo Instalasi" },
   { label: "Video Event", value: "Video Event" },
   { label: "Video Product", value: "Video Product" },
   { label: "Video Instlasi", value: "Video Instlasi" },
+  { label: "Video Editing", value: "Video Editing" },
   { label: "Lainnya...", value: "Lainnya" },
 ];
 

@@ -53,12 +53,16 @@ const PROJECT_OPTIONS = [
   "Design File Presentasi",
   "Design Label",
   "Design Stiker",
-  "Photo Event",
+  "Design Kartu Nama",
+  "Design Buku",
+  "Design Template",
+  "Photo Editing",
   "Photo Product",
   "Photo Instalasi",
   "Video Event",
   "Video Product",
   "Video Instlasi",
+  "Video Editing",
   "Lainnya",
 ];
 
