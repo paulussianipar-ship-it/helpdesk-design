@@ -73,6 +73,27 @@ export function ArticleForm({ articleId }: ArticleFormProps) {
   const [featured, setFeatured] = useState(false);
   const [publishedAt, setPublishedAt] = useState<string | null>(null);
 
+  // Pastikan hanya admin yang bisa mengakses form edit/buat
+  useEffect(() => {
+    async function checkAdmin() {
+      const { data } = await s.auth.getUser();
+      if (!data?.user) {
+        router.push("/auth/login");
+        return;
+      }
+      const { data: profile } = await s
+        .from("users")
+        .select("role")
+        .eq("id", data.user.id)
+        .single();
+      if (profile?.role !== "admin") {
+        toast.error("Hanya admin yang dapat mengelola artikel.");
+        router.push("/artikel-admin");
+      }
+    }
+    checkAdmin();
+  }, [s, router]);
+
   // Muat artikel saat mode edit
   useEffect(() => {
     if (!articleId) return;

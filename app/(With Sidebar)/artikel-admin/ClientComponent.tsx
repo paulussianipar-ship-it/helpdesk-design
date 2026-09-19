@@ -27,7 +27,7 @@ import {
   STATUS_LABEL,
   formatDateID,
 } from "@/lib/articles";
-import { Loader2, Plus, Search, Star } from "lucide-react";
+import { Eye, Loader2, Plus, Search, Star } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useCallback, useTransition } from "react";
 import { toast } from "sonner";
@@ -56,6 +56,26 @@ export function ArtikelAdminClientContent() {
   const [loading, setLoading] = useState(true);
   const [totalItems, setTotalItems] = useState(0);
   const [isPending, startTransition] = useTransition();
+  const [userRole, setUserRole] = useState<string>("user");
+
+  useEffect(() => {
+    async function checkRole() {
+      const { data } = await s.auth.getUser();
+      if (data?.user) {
+        const { data: profile } = await s
+          .from("users")
+          .select("role")
+          .eq("id", data.user.id)
+          .single();
+        if (profile?.role) {
+          setUserRole(profile.role);
+        }
+      }
+    }
+    checkRole();
+  }, [s]);
+
+  const isAdmin = userRole === "admin";
 
   const currentPage = Number(searchParams.get("page") || "1");
   const searchTerm = searchParams.get("search") || "";
@@ -133,16 +153,22 @@ export function ArtikelAdminClientContent() {
 
   return (
     <Content
-      title="Kelola Artikel"
-      description="Buat, terbitkan, arsipkan, atau hapus artikel."
+      title={isAdmin ? "Kelola Artikel" : "Daftar Artikel"}
+      description={
+        isAdmin
+          ? "Buat, terbitkan, arsipkan, atau hapus artikel."
+          : "Kumpulan artikel, tips, dan wawasan seputar desain."
+      }
       size="lg"
       cardAction={
-        <Button asChild>
-          <a href="/artikel-admin/buat">
-            <Plus className="mr-2 h-4 w-4" />
-            Buat Artikel
-          </a>
-        </Button>
+        isAdmin ? (
+          <Button asChild>
+            <a href="/artikel-admin/buat">
+              <Plus className="mr-2 h-4 w-4" />
+              Buat Artikel
+            </a>
+          </Button>
+        ) : null
       }
     >
       <div className="flex flex-col md:flex-row gap-4 mb-6">
@@ -155,22 +181,24 @@ export function ArtikelAdminClientContent() {
             onChange={(e) => setSearchInput(e.target.value)}
           />
         </div>
-        <Select
-          onValueChange={(value) =>
-            handleFilterChange({ status: value === "all" ? undefined : value })
-          }
-          defaultValue={statusFilter || "all"}
-        >
-          <SelectTrigger className="w-full md:w-[200px]">
-            <SelectValue placeholder="Filter status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Semua Status</SelectItem>
-            <SelectItem value="draft">Draft</SelectItem>
-            <SelectItem value="published">Published</SelectItem>
-            <SelectItem value="archived">Archived</SelectItem>
-          </SelectContent>
-        </Select>
+        {isAdmin && (
+          <Select
+            onValueChange={(value) =>
+              handleFilterChange({ status: value === "all" ? undefined : value })
+            }
+            defaultValue={statusFilter || "all"}
+          >
+            <SelectTrigger className="w-full md:w-[200px]">
+              <SelectValue placeholder="Filter status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua Status</SelectItem>
+              <SelectItem value="draft">Draft</SelectItem>
+              <SelectItem value="published">Published</SelectItem>
+              <SelectItem value="archived">Archived</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       <div className="border rounded-md">
@@ -202,12 +230,17 @@ export function ArtikelAdminClientContent() {
                     {(currentPage - 1) * limit + index + 1}
                   </TableCell>
                   <TableCell className="font-semibold">
-                    <span className="flex items-center gap-1.5">
+                    <a
+                      href={`/artikel/${article.slug}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1.5 hover:text-primary transition-colors hover:underline"
+                    >
                       {article.featured && (
-                        <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+                        <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400 shrink-0" />
                       )}
-                      {article.title}
-                    </span>
+                      <span>{article.title}</span>
+                    </a>
                   </TableCell>
                   <TableCell>
                     <Badge variant={statusVariant[article.status]}>
@@ -234,15 +267,26 @@ export function ArtikelAdminClientContent() {
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
                       {article.slug && (
-                        <Button variant="ghost" size="sm" asChild>
-                          <a href={`/artikel/${article.slug}`} target="_blank" rel="noreferrer">
+                        <Button
+                          variant={isAdmin ? "ghost" : "default"}
+                          size="sm"
+                          asChild
+                        >
+                          <a
+                            href={`/artikel/${article.slug}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <Eye className="mr-1.5 h-3.5 w-3.5" />
                             Lihat
                           </a>
                         </Button>
                       )}
-                      <Button variant="outline" size="sm" asChild>
-                        <a href={`/artikel-admin/${article.id}`}>Edit</a>
-                      </Button>
+                      {isAdmin && (
+                        <Button variant="outline" size="sm" asChild>
+                          <a href={`/artikel-admin/${article.id}`}>Edit</a>
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
