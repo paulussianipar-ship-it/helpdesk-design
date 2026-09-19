@@ -86,29 +86,29 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       <SidebarProvider>
         {/* Pastikan AppSidebar menerima prop user dengan tipe yang sesuai */}
         <AppSidebar className="shadow-lg" />
-        <SidebarInset>
-          <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-            <div className="flex items-center gap-2 px-4">
+        <SidebarInset className="min-w-0">
+          <header className="flex h-14 shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+            <div className="flex items-center gap-2 px-3 sm:px-4 w-full">
               <SidebarTrigger className="-ml-1" />
               <Separator
                 orientation="vertical"
-                className="mr-2 data-[orientation=vertical]:h-4"
+                className="mr-1 sm:mr-2 data-[orientation=vertical]:h-4 hidden sm:block"
               />
-              <Breadcrumb>
-                <BreadcrumbList>
-                  <BreadcrumbItem className="hidden md:block">
-                    <BreadcrumbLink href="/dashboard">
+              <Breadcrumb className="flex-1 min-w-0">
+                <BreadcrumbList className="flex flex-nowrap items-center gap-1 overflow-x-auto text-xs sm:text-sm py-1">
+                  <BreadcrumbItem className="hidden sm:inline-flex">
+                    <BreadcrumbLink href="/dashboard" className="whitespace-nowrap">
                       Design Desk
                     </BreadcrumbLink>
                   </BreadcrumbItem>
-                  <BreadcrumbSeparator className="hidden md:block" />
+                  <BreadcrumbSeparator className="hidden sm:inline-flex" />
                   {urlToBreadcrumb(usePathname())}
                 </BreadcrumbList>
               </Breadcrumb>
             </div>
           </header>
-          <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-            <div className="grid grid-cols-12 items-start gap-4 md:gap-6 auto-rows-auto">
+          <div className="flex flex-1 flex-col gap-4 p-3 sm:p-4 lg:p-6 pt-3 sm:pt-4 min-w-0">
+            <div className="grid grid-cols-12 items-start gap-4 sm:gap-5 lg:gap-6 auto-rows-auto min-w-0">
               {children}
             </div>
           </div>

@@ -359,27 +359,27 @@ export default function DashboardPage() {
   return (
     <>
       {/* SECTION: Toolbar Atas (Tanggal/Jam, Rekap Bulanan, Export) */}
-      <div className="col-span-12 flex flex-wrap items-center justify-end gap-2">
+      <div className="col-span-12 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
         <LiveClock />
 
         {role === "admin" && (
-          <>
-            <Button variant="outline" size="sm" className="h-9 gap-1.5" asChild>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" className="h-9 gap-1.5 whitespace-nowrap" asChild>
               <Link href="/rekap-bulanan">
                 <FileSpreadsheet className="size-4 text-blue-600" />
-                Rekap Bulanan
+                <span className="inline">Rekap Bulanan</span>
               </Link>
             </Button>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-9 gap-1.5">
+                <Button variant="outline" size="sm" className="h-9 gap-1.5 whitespace-nowrap">
                   {exporting ? (
                     <Loader2 className="size-4 animate-spin text-emerald-600" />
                   ) : (
                     <Download className="size-4 text-emerald-600" />
                   )}
-                  Export Data
+                  <span className="hidden sm:inline">Export Data</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -398,7 +398,7 @@ export default function DashboardPage() {
               open={exportModalOpen}
               onOpenChange={setExportModalOpen}
             />
-          </>
+          </div>
         )}
       </div>
       {/* SECTION: KPI Cards */}
@@ -414,7 +414,7 @@ export default function DashboardPage() {
         className="mt-6"
       >
         <div className="w-full overflow-x-auto rounded-md border">
-          <Table className="min-w-[900px]">
+          <Table className="min-w-[800px]">
             <TableHeader>
               <TableRow>
                 <TableHead>Project</TableHead>
@@ -503,7 +503,7 @@ export default function DashboardPage() {
       <Content
         size="xs"
         title={role === "admin" ? "Permintaan Baru" : "Permintaan Saya (Baru)"}
-        className="bg-blue-300 dark:bg-blue-950 col-span-1"
+        className="bg-blue-300 dark:bg-blue-950 col-span-12 sm:col-span-6 lg:col-span-3"
         description="Status TO DO"
         cardAction={<FilePlus2 className="h-4 w-4 text-muted-foreground" />}
       >
@@ -516,7 +516,7 @@ export default function DashboardPage() {
       <Content
         size="xs"
         title="Sedang Dikerjakan"
-        className="bg-cyan-400 dark:bg-cyan-950 col-span-1"
+        className="bg-cyan-400 dark:bg-cyan-950 col-span-12 sm:col-span-6 lg:col-span-3"
         description="Status PROGRESS"
         cardAction={
           <GitPullRequest className="h-4 w-4 text-muted-foreground" />
@@ -534,7 +534,7 @@ export default function DashboardPage() {
           <Content
             size="xs"
             title="Review User"
-            className="bg-yellow-400 dark:bg-yellow-700 col-span-1"
+            className="bg-yellow-400 dark:bg-yellow-700 col-span-12 sm:col-span-6 lg:col-span-3"
             description="Menunggu persetujuan user"
             cardAction={<Eye className="h-4 w-4 text-muted-foreground" />}
           >
@@ -547,7 +547,7 @@ export default function DashboardPage() {
           <Content
             size="xs"
             title="Selesai Hari Ini"
-            className="bg-green-300 dark:bg-green-800 col-span-1"
+            className="bg-green-300 dark:bg-green-800 col-span-12 sm:col-span-6 lg:col-span-3"
             description={new Date().toLocaleDateString("id-ID")}
             cardAction={
               <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
@@ -562,7 +562,7 @@ export default function DashboardPage() {
           <Content
             size="xs"
             title="Selesai Minggu Ini"
-            className="bg-green-400 dark:bg-green-900 col-span-1"
+            className="bg-green-400 dark:bg-green-900 col-span-12 sm:col-span-6 lg:col-span-3"
             description="Senin s/d Hari ini"
             cardAction={
               <CalendarDays className="h-4 w-4 text-muted-foreground" />
@@ -577,7 +577,7 @@ export default function DashboardPage() {
           <Content
             size="xs"
             title="Selesai Bulan Ini"
-            className="bg-emerald-500 dark:bg-emerald-950 col-span-1"
+            className="bg-emerald-500 dark:bg-emerald-950 col-span-12 sm:col-span-6 lg:col-span-3"
             description="Total bulan ini"
             cardAction={
               <CalendarRange className="h-4 w-4 text-muted-foreground" />
@@ -594,7 +594,7 @@ export default function DashboardPage() {
           <Content
             size="xs"
             title="Perlu Revisi"
-            className="bg-orange-300 dark:bg-orange-800 col-span-1"
+            className="bg-orange-300 dark:bg-orange-800 col-span-12 sm:col-span-6 lg:col-span-3"
             description="Permintaan dikembalikan (REVISION)"
             cardAction={
               <MessageSquareQuote className="h-4 w-4 text-muted-foreground" />
@@ -609,7 +609,7 @@ export default function DashboardPage() {
           <Content
             size="xs"
             title="Selesai"
-            className="bg-green-300 dark:bg-green-800 col-span-1"
+            className="bg-green-300 dark:bg-green-800 col-span-12 sm:col-span-6 lg:col-span-3"
             description="Total permintaan selesai (DONE)"
             cardAction={
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
@@ -629,7 +629,7 @@ export default function DashboardPage() {
           title="Rata-rata Rating Kepuasan"
           description="Dari semua permintaan yang selesai"
           cardAction={<Star className="h-5 w-5 text-yellow-400" />}
-          className="mt-6"
+          className="mt-6 col-span-12 sm:col-span-6 lg:col-span-3"
         >
           <p className="text-4xl font-bold">
             {loading
@@ -646,7 +646,7 @@ export default function DashboardPage() {
           <Content
             size="xs"
             title="Total Artikel"
-            className="bg-indigo-300 dark:bg-indigo-950 col-span-1 mt-6"
+            className="bg-indigo-300 dark:bg-indigo-950 col-span-12 sm:col-span-6 lg:col-span-3 mt-6"
             description="Semua status"
             cardAction={<Newspaper className="h-4 w-4 text-muted-foreground" />}
           >
@@ -659,7 +659,7 @@ export default function DashboardPage() {
           <Content
             size="xs"
             title="Artikel Terbit"
-            className="bg-green-300 dark:bg-green-800 col-span-1 mt-6"
+            className="bg-green-300 dark:bg-green-800 col-span-12 sm:col-span-6 lg:col-span-3 mt-6"
             description="Status PUBLISHED"
             cardAction={<FileCheck2 className="h-4 w-4 text-muted-foreground" />}
           >
@@ -672,7 +672,7 @@ export default function DashboardPage() {
           <Content
             size="xs"
             title="Draft"
-            className="bg-slate-300 dark:bg-slate-800 col-span-1 mt-6"
+            className="bg-slate-300 dark:bg-slate-800 col-span-12 sm:col-span-6 lg:col-span-3 mt-6"
             description="Belum dipublikasikan"
             cardAction={<FileClock className="h-4 w-4 text-muted-foreground" />}
           >
@@ -685,7 +685,7 @@ export default function DashboardPage() {
           <Content
             size="xs"
             title="Total Dilihat"
-            className="bg-purple-300 dark:bg-purple-950 col-span-1 mt-6"
+            className="bg-purple-300 dark:bg-purple-950 col-span-12 sm:col-span-6 lg:col-span-3 mt-6"
             description="Akumulasi semua artikel"
             cardAction={<Eye className="h-4 w-4 text-muted-foreground" />}
           >

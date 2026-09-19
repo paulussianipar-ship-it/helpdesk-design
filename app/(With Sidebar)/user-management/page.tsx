@@ -259,8 +259,8 @@ export default function UserManagementPage() {
         </div>
 
         {/* TABLE */}
-        <div className="rounded-md border bg-card">
-          <Table>
+        <div className="rounded-md border bg-card overflow-hidden">
+          <Table className="min-w-[640px]">
             <TableHeader>
               <TableRow className="bg-muted/40">
                 <TableHead className="w-[50px]">No</TableHead>

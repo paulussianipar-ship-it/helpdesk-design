@@ -51,7 +51,7 @@ export function Combobox({
           <ChevronsUpDown className="opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-full p-0">
+      <PopoverContent className="w-[--radix-popover-trigger-width] min-w-[240px] max-w-[calc(100vw-2rem)] p-0">
         <Command>
           <CommandInput placeholder="Cari data..." className="w-full h-9" />
           <CommandList>

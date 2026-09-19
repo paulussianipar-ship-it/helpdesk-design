@@ -1,5 +1,4 @@
-"use client";
-
+import { Suspense } from "react";
 import * as React from "react";
 import { redirect, usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -9,7 +8,9 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "./nav-user";
 import {
@@ -25,6 +26,7 @@ import {
   UserCheck,
   FolderKanban,
   ShieldCheck,
+  X,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -124,6 +126,52 @@ const data = {
   ],
 };
 
+function SidebarLogo() {
+  const { isMobile, setOpenMobile } = useSidebar();
+
+  return (
+    <div className="flex h-12 items-center justify-between px-3 w-full">
+      <div className="flex items-center gap-2 overflow-hidden">
+        <Image
+          src={"/lourdes.png"}
+          width={32}
+          height={32}
+          alt="Lourdes Autoparts"
+          className="h-8 w-auto shrink-0"
+        />
+        <span className={isMobile ? "text-sm font-semibold truncate inline" : "hidden text-sm font-semibold truncate group-data-[state=expanded]:inline"}>
+          Lourdes Autoparts
+        </span>
+      </div>
+      {isMobile && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 shrink-0 text-sidebar-foreground hover:bg-sidebar-accent"
+          onClick={() => setOpenMobile(false)}
+          title="Tutup menu"
+        >
+          <X className="size-4" />
+          <span className="sr-only">Tutup menu</span>
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function UserAvatarFallback({ name }: { name: string }) {
+  return (
+    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary font-medium text-xs">
+      {name
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)}
+    </div>
+  );
+}
+
 export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   const currentPath = usePathname();
   const supabase = createClient();
@@ -155,14 +203,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <div>
-          <Image
-            src={"/lourdes.png"}
-            width={500}
-            height={500}
-            alt="Lourdes Autoparts"
-          />
-        </div>
+        <SidebarLogo />
       </SidebarHeader>
 
       <SidebarContent>
@@ -186,7 +227,7 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         )}
       </SidebarFooter>
 
-      <SidebarRail />
+      <SidebarRail className="bg-transparent" />
     </Sidebar>
   );
 }

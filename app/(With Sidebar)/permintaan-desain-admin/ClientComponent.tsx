@@ -400,8 +400,8 @@ export function PermintaanAdminClientContent() {
         </div>
       </div>
 
-      <div className="border rounded-md">
-        <Table>
+      <div className="border rounded-md overflow-hidden">
+        <Table className="min-w-[700px]">
           <TableHeader>
             <TableRow>
               <TableHead className="w-[50px]">No</TableHead>

@@ -17,6 +17,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { MyAlertDialog } from "./dialog-confirm";
 import { redirect } from "next/navigation";
@@ -32,7 +33,7 @@ export function NavUser({
 }) {
   const [logoutDialog, setLogoutDialog] = useState<boolean>(false);
 
-  const { isMobile } = useSidebar();
+  const { isMobile, setOpenMobile } = useSidebar();
 
   async function handleLogout() {
     const supabase = createClient();
@@ -87,11 +88,17 @@ export function NavUser({
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
-                <DropdownMenuItem>
-                  <SquareUserRound />
-                  <a href="/profile" className="w-full">
-                    My Profile
-                  </a>
+                <DropdownMenuItem asChild>
+                  <Link
+                    href="/profile"
+                    className="w-full flex items-center gap-2 cursor-pointer"
+                    onClick={() => {
+                      if (isMobile) setOpenMobile(false);
+                    }}
+                  >
+                    <SquareUserRound className="size-4" />
+                    <span>My Profile</span>
+                  </Link>
                 </DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuSeparator />

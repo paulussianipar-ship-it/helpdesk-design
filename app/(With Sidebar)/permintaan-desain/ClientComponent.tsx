@@ -459,26 +459,26 @@ export default function PermintaanList() {
         </div>
 
         {/* Baris 2: Date Range Filter (Tersedia untuk SEMUA Role) */}
-        <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-muted/40 p-3 rounded-lg border">
+        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between bg-muted/40 p-3 rounded-lg border">
           <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-1 sm:flex-initial min-w-[140px]">
               <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
                 Dari:
               </span>
               <Input
                 type="date"
-                className="h-9 w-auto text-xs"
+                className="h-9 w-full sm:w-auto text-xs"
                 value={startDateInput}
                 onChange={(e) => setStartDateInput(e.target.value)}
               />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-1 sm:flex-initial min-w-[140px]">
               <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
                 Sampai:
               </span>
               <Input
                 type="date"
-                className="h-9 w-auto text-xs"
+                className="h-9 w-full sm:w-auto text-xs"
                 value={endDateInput}
                 onChange={(e) => setEndDateInput(e.target.value)}
               />
@@ -486,7 +486,7 @@ export default function PermintaanList() {
             <Button
               size="sm"
               variant="secondary"
-              className="h-9"
+              className="h-9 w-full sm:w-auto"
               onClick={() => {
                 handleFilter("startDate", startDateInput);
                 handleFilter("endDate", endDateInput);
@@ -500,7 +500,7 @@ export default function PermintaanList() {
             <Button
               size="sm"
               variant="ghost"
-              className="h-9 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5"
+              className="h-9 text-xs text-muted-foreground hover:text-foreground flex items-center justify-center gap-1.5 self-start sm:self-auto"
               onClick={handleResetFilters}
             >
               <RotateCcw className="h-3.5 w-3.5" /> Reset Filter
@@ -511,7 +511,7 @@ export default function PermintaanList() {
 
       {/* TABLE AREA */}
       <div className="border rounded-lg overflow-hidden bg-card">
-        <Table>
+        <Table className="min-w-[760px]">
           <TableHeader>
             <TableRow className="bg-muted/50">
               <TableHead className="w-[50px] font-semibold">No</TableHead>

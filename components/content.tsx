@@ -51,15 +51,19 @@ export function Content({
   return (
     <Card id={id} className={cn("col-span-12", colClass, className)}>
       {(title || description || cardAction) && (
-        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            {title && <CardTitle>{title}</CardTitle>}
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0 flex-1">
+            {title && <CardTitle className="truncate sm:whitespace-normal">{title}</CardTitle>}
             {description && (
               <CardDescription className="mt-1">{description}</CardDescription>
             )}
           </div>
 
-          {cardAction && <CardAction>{cardAction}</CardAction>}
+          {cardAction && (
+            <CardAction className="self-start sm:self-auto w-full sm:w-auto flex flex-wrap items-center gap-2 justify-start sm:justify-end">
+              {cardAction}
+            </CardAction>
+          )}
         </CardHeader>
       )}
 
