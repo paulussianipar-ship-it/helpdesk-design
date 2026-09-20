@@ -111,6 +111,7 @@ export async function GET(request: NextRequest) {
     const requester = searchParams.get("requester") || "";
     const startDate = searchParams.get("startDate") || "";
     const endDate = searchParams.get("endDate") || "";
+    const month = searchParams.get("month") || "";
     const all = searchParams.get("all") === "true"; // For Excel export
 
     let query = supabase.from("permintaan").select("*", { count: "exact" });
@@ -135,13 +136,63 @@ export async function GET(request: NextRequest) {
       query = query.eq("requester", requester);
     }
 
-    // Apply Date Range
-    if (startDate) {
-      query = query.gte("created_at", startDate);
+    // Apply Month or Date Range
+    if (month && month !== "all") {
+      const [yStr, mStr] = month.split("-");
+      const y = parseInt(yStr, 10);
+      const m = parseInt(mStr, 10);
+      if (!isNaN(y) && !isNaN(m)) {
+        const lastDay = new Date(y, m, 0).getDate();
+        const start = `${month}-01T00:00:00.000Z`;
+        const end = `${month}-${String(lastDay).padStart(2, "0")}T23:59:59.999Z`;
+        query = query.gte("created_at", start).lte("created_at", end);
+      }
+    } else {
+      if (startDate) {
+        query = query.gte("created_at", startDate);
+      }
+      if (endDate) {
+        query = query.lte("created_at", `${endDate} 23:59:59.999Z`);
+      }
     }
-    if (endDate) {
-      query = query.lte("created_at", `${endDate} 23:59:59.999Z`);
+
+    // Calculate Monthly Stats (without pagination)
+    let statsQuery = supabase.from("permintaan").select("status");
+    if (month && month !== "all") {
+      const [yStr, mStr] = month.split("-");
+      const y = parseInt(yStr, 10);
+      const m = parseInt(mStr, 10);
+      if (!isNaN(y) && !isNaN(m)) {
+        const lastDay = new Date(y, m, 0).getDate();
+        const start = `${month}-01T00:00:00.000Z`;
+        const end = `${month}-${String(lastDay).padStart(2, "0")}T23:59:59.999Z`;
+        statsQuery = statsQuery.gte("created_at", start).lte("created_at", end);
+      }
+    } else {
+      if (startDate) statsQuery = statsQuery.gte("created_at", startDate);
+      if (endDate) statsQuery = statsQuery.lte("created_at", `${endDate} 23:59:59.999Z`);
     }
+    if (designer && designer !== "all") statsQuery = statsQuery.eq("admin", designer);
+    if (requester && requester !== "all") statsQuery = statsQuery.eq("requester", requester);
+    if (search) statsQuery = statsQuery.or(`judul.ilike.%${search}%,project.ilike.%${search}%,departemen.ilike.%${search}%`);
+
+    const { data: statsData } = await statsQuery;
+    const stats = {
+      total: statsData?.length || 0,
+      todo: 0,
+      progress: 0,
+      review: 0,
+      revision: 0,
+      done: 0,
+    };
+    statsData?.forEach((row: any) => {
+      const s = (row.status || "").toUpperCase();
+      if (s === "DONE") stats.done++;
+      else if (s === "PROGRESS") stats.progress++;
+      else if (s === "REVIEW") stats.review++;
+      else if (s === "REVISION") stats.revision++;
+      else if (s === "TO DO" || s === "TODO") stats.todo++;
+    });
 
     // Order
     query = query.order("created_at", { ascending: false });
@@ -198,6 +249,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       data: formattedData,
       total: count || 0,
+      stats,
       page,
       limit,
     });

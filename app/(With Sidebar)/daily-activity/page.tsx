@@ -266,23 +266,15 @@ export default function DailyActivityPage() {
   // Delete modal state
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
-  // Load activities from Supabase & fallback to local storage
+  // Load activities from API (All Roles supported) & fallback to local storage
   const loadActivities = async () => {
     setLoading(true);
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (user) {
-        const { data, error } = await supabase
-          .from("daily_activities")
-          .select("id, request_id, activity_date, name, task_description, status, remarks, created_at")
-          .eq("user_id", user.id)
-          .order("activity_date", { ascending: false })
-          .order("created_at", { ascending: false });
-
-        if (!error && data && data.length > 0) {
+      const res = await fetch("/api/daily-activity");
+      if (res.ok) {
+        const json = await res.json();
+        const data = json.data || [];
+        if (data.length > 0) {
           const mapped: DailyActivity[] = data.map((d: any) => ({
             id: d.id,
             request_id: d.request_id,
@@ -577,20 +569,18 @@ export default function DailyActivityPage() {
         );
         saveLocalActivities(updatedList);
 
-        if (user) {
-          await supabase
-            .from("daily_activities")
-            .update({
-              activity_date: formData.activity_date,
-              name: formData.name.trim(),
-              task_description: formData.task_description.trim(),
-              title: formData.task_description.trim(),
-              status: formData.status,
-              remarks: formData.remarks.trim() || null,
-              description: formData.remarks.trim() || null,
-            })
-            .eq("id", editingActivity.id);
-        }
+        await fetch("/api/daily-activity", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: editingActivity.id,
+            activity_date: formData.activity_date,
+            name: formData.name.trim(),
+            task_description: formData.task_description.trim(),
+            status: formData.status,
+            remarks: formData.remarks.trim() || null,
+          }),
+        });
 
         toast.success("Aktivitas berhasil diperbarui.");
       } else {
@@ -609,26 +599,18 @@ export default function DailyActivityPage() {
         const updatedList = [newActivity, ...activities];
         saveLocalActivities(updatedList);
 
-        if (user) {
-          const { data: inserted, error: insertError } = await supabase
-            .from("daily_activities")
-            .insert({
-              user_id: user.id,
-              activity_date: newActivity.activity_date,
-              name: newActivity.name,
-              task_description: newActivity.task_description,
-              title: newActivity.task_description,
-              status: newActivity.status,
-              remarks: newActivity.remarks,
-              description: newActivity.remarks,
-            })
-            .select("id")
-            .single();
-
-          if (!insertError && inserted?.id) {
-            newActivity.id = inserted.id;
-          }
-        }
+        await fetch("/api/daily-activity", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_id: user?.id || null,
+            activity_date: newActivity.activity_date,
+            name: newActivity.name,
+            task_description: newActivity.task_description,
+            status: newActivity.status,
+            remarks: newActivity.remarks,
+          }),
+        });
 
         // Align selected month
         const inputMonth = formData.activity_date.slice(0, 7);
@@ -655,16 +637,9 @@ export default function DailyActivityPage() {
       const updatedList = activities.filter((a) => a.id !== deleteTargetId);
       saveLocalActivities(updatedList);
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (user) {
-        await supabase
-          .from("daily_activities")
-          .delete()
-          .eq("id", deleteTargetId);
-      }
+      await fetch(`/api/daily-activity?id=${deleteTargetId}`, {
+        method: "DELETE",
+      });
 
       toast.success("Aktivitas berhasil dihapus.");
     } catch (err: any) {
@@ -905,38 +880,31 @@ export default function DailyActivityPage() {
         };
       });
 
-      if (user) {
-        if (importMode === "replace_month") {
-          await supabase
-            .from("daily_activities")
-            .delete()
-            .eq("user_id", user.id)
-            .gte("activity_date", `${targetImportMonth}-01`)
-            .lte("activity_date", `${targetImportMonth}-31`);
-        } else if (importMode === "replace_all") {
-          await supabase
-            .from("daily_activities")
-            .delete()
-            .eq("user_id", user.id);
-        }
+      if (importMode === "replace_month") {
+        await fetch(`/api/daily-activity?month=${targetImportMonth}`, {
+          method: "DELETE",
+        });
+      }
 
-        const dbRows = preparedRows.map((r) => ({
-          user_id: user.id,
-          activity_date: r.activity_date,
-          name: r.name,
-          task_description: r.task_description,
-          title: r.task_description,
-          status: r.status,
-          remarks: r.remarks,
-          description: r.remarks,
-        }));
+      const dbRows = preparedRows.map((r) => ({
+        user_id: user?.id || null,
+        activity_date: r.activity_date,
+        name: r.name,
+        task_description: r.task_description,
+        title: r.task_description,
+        status: r.status,
+        remarks: r.remarks,
+        description: r.remarks,
+      }));
 
-        const batchSize = 100;
-        for (let i = 0; i < dbRows.length; i += batchSize) {
-          const chunk = dbRows.slice(i, i + batchSize);
-          const { error: insertError } = await supabase.from("daily_activities").insert(chunk);
-          if (insertError) throw insertError;
-        }
+      const importRes = await fetch("/api/daily-activity", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dbRows),
+      });
+
+      if (!importRes.ok) {
+        throw new Error("Gagal menyimpan data import ke server");
       }
 
       // Update local storage
