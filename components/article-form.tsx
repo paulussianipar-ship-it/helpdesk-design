@@ -45,6 +45,7 @@ import {
   Save,
   ExternalLink,
   X,
+  ArrowLeft,
 } from "lucide-react";
 
 interface ArticleFormProps {
@@ -268,6 +269,14 @@ export function ArticleForm({ articleId }: ArticleFormProps) {
       title={isEdit ? "Edit Artikel" : "Buat Artikel"}
       description="Isi konten, atur tag, lalu simpan sebagai draft atau terbitkan."
       size="lg"
+      cardAction={
+        <Button variant="outline" size="sm" asChild>
+          <a href="/artikel-admin">
+            <ArrowLeft className="mr-1.5 h-4 w-4" />
+            Kembali ke Daftar
+          </a>
+        </Button>
+      }
     >
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Kolom utama */}

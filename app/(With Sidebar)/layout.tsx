@@ -28,13 +28,26 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       const isLast = index === parts.length - 1;
       const href = `/${parts.slice(0, index + 1).join("/")}`;
 
-      const readablePart = decodeURIComponent(
+      let readablePart = decodeURIComponent(
         part.replace(/-/g, " ").replace(/\b\w/g, (s) => s.toUpperCase())
       );
 
-      // 👉 skip kalau part terakhir adalah UUID
-      if (isLast && /^[0-9a-fA-F-]{36}$/.test(part)) {
-        return null;
+      // Pemetaan nama menu yang ramah pembaca
+      if (part === "artikel-admin") {
+        readablePart = "Artikel";
+      } else if (part === "buat") {
+        readablePart = "Buat Artikel";
+      } else if (part === "edit") {
+        readablePart = "Edit";
+      }
+
+      // 👉 kalau part adalah UUID
+      if (/^[0-9a-fA-F-]{36}$/.test(part)) {
+        if (isLast) {
+          readablePart = "Edit Artikel";
+        } else {
+          return null;
+        }
       }
 
       return (
