@@ -55,10 +55,7 @@ interface PermintaanExport {
   status: string;
   departemen: string;
   project: string;
-  // Relasi untuk mengambil nama requester
-  requester: {
-    name: string;
-  } | null;
+  requester?: string | null;
 }
 
 const LIMIT_OPTIONS = [10, 25, 50, 100];
@@ -219,7 +216,7 @@ export function PermintaanAdminClientContent() {
             status,
             departemen,
             project,
-            requester:user_profiles (name)
+            requester
             `
       );
 
@@ -241,6 +238,25 @@ export function PermintaanAdminClientContent() {
         return;
       }
 
+      // Ambil data profile pemohon (requester) secara terpisah
+      const requesterIds = Array.from(
+        new Set((data || []).map((item) => item.requester).filter(Boolean))
+      ) as string[];
+
+      const nameMap: Record<string, string> = {};
+      if (requesterIds.length > 0) {
+        const { data: profiles } = await s
+          .from("user_profiles")
+          .select("id, name")
+          .in("id", requesterIds);
+
+        if (profiles) {
+          profiles.forEach((p: any) => {
+            if (p.id && p.name) nameMap[p.id] = p.name;
+          });
+        }
+      }
+
       // REVISI: Format data sesuai kolom yang diminta
       const formattedData = data.map((item) => ({
         "Tanggal Dibuat": new Date(item.created_at).toLocaleString("id-ID", {
@@ -255,7 +271,7 @@ export function PermintaanAdminClientContent() {
         Status: item.status,
         Departemen: item.departemen,
         Project: item.project,
-        Requester: item.requester?.name || "N/A",
+        Requester: (item.requester ? nameMap[item.requester] : null) || "N/A",
       }));
 
       const worksheet = XLSX.utils.json_to_sheet(formattedData);

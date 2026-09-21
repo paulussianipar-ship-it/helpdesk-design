@@ -119,8 +119,7 @@ export function FeedbackClientContent() {
         let baseQuery = s
           .from("permintaan")
           .select(
-            `id, judul, rating, review, created_at,
-            requester_data:user_profiles!permintaan_requester_fkey(name)`,
+            `id, judul, rating, review, created_at, requester`,
             { count: "exact" }
           )
           .eq("status", "DONE")
@@ -141,6 +140,25 @@ export function FeedbackClientContent() {
 
         if (error) throw error;
 
+        // Ambil data profile pemohon (requester) secara terpisah
+        const requesterIds = Array.from(
+          new Set((data || []).map((item: any) => item.requester).filter(Boolean))
+        ) as string[];
+
+        const nameMap: Record<string, string> = {};
+        if (requesterIds.length > 0) {
+          const { data: profiles } = await s
+            .from("user_profiles")
+            .select("id, name")
+            .in("id", requesterIds);
+
+          if (profiles) {
+            profiles.forEach((p: any) => {
+              if (p.id && p.name) nameMap[p.id] = p.name;
+            });
+          }
+        }
+
         const mapped: ReviewItem[] = (data || []).map((item: any) => ({
           id: item.id,
           judul: item.judul,
@@ -148,7 +166,7 @@ export function FeedbackClientContent() {
           review: item.review,
           created_at: item.created_at,
           requester_name:
-            item.requester_data?.name || "Pengguna",
+            (item.requester ? nameMap[item.requester] : null) || "Pengguna",
         }));
 
         setReviews(mapped);

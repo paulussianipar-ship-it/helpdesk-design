@@ -76,8 +76,10 @@ interface KpiRow {
   keterangan: string;
   realisasi: number | null;
   skor: number | null;
+  skor_akhir: number | null;
   nilai_akhir: number | null;
   cara_pengukuran: string;
+  divisi: string;
   data_source: string;
   note: string;
   raw?: Record<string, any>;
@@ -183,7 +185,7 @@ export default function KpiClientComponent() {
   const [isCustomized, setIsCustomized] = useState(false);
 
   // Form State for Edit Modal
-  const [formData, setFormData] = useState<Omit<KpiRow, "id" | "no" | "skor" | "nilai_akhir" | "raw">>({
+  const [formData, setFormData] = useState<Omit<KpiRow, "id" | "no" | "skor" | "skor_akhir" | "nilai_akhir" | "raw">>({
     perspektif_bsc: "Learning & Growth",
     strategy: "",
     tujuan_strategi: "",
@@ -196,6 +198,7 @@ export default function KpiClientComponent() {
     keterangan: "Persentase",
     realisasi: 100,
     cara_pengukuran: "",
+    divisi: "Creative",
     data_source: "Daily Activity",
     note: "A1",
   });
@@ -208,16 +211,17 @@ export default function KpiClientComponent() {
     cap: number,
     bobot: number,
     polarity: "Max" | "Min"
-  ): number | null => {
-    if (realisasi === null) return null;
+  ): { skor: number | null; skor_akhir: number | null } => {
+    if (realisasi === null) return { skor: null, skor_akhir: null };
     let ratio = 0;
     if (polarity === "Max") {
-      ratio = target > 0 ? realisasi / target : 0;
+      ratio = target > 0 ? (realisasi / target) * 100 : 0;
     } else {
-      ratio = realisasi > 0 ? target / realisasi : 1;
+      ratio = realisasi > 0 ? (target / realisasi) * 100 : cap;
     }
-    const cappedRatio = Math.min(ratio, cap / 100);
-    return Math.round(cappedRatio * bobot * 100) / 100;
+    const skor = Math.round(Math.min(ratio, cap) * 100) / 100;
+    const skor_akhir = Math.round((skor / 100) * bobot * 100) / 100;
+    return { skor, skor_akhir };
   };
 
   // ——————————————————————————————
@@ -243,7 +247,7 @@ export default function KpiClientComponent() {
           const customRows: KpiRow[] = JSON.parse(saved);
           if (Array.isArray(customRows) && customRows.length > 0) {
             const total_bobot = customRows.reduce((sum, r) => sum + (Number(r.bobot) || 0), 0);
-            const total_nilai_akhir = customRows.reduce((sum, r) => sum + (Number(r.skor) || 0), 0);
+            const total_nilai_akhir = customRows.reduce((sum, r) => sum + (Number(r.skor_akhir ?? r.skor) || 0), 0);
             setData({
               ...json,
               rows: customRows,
@@ -288,6 +292,7 @@ export default function KpiClientComponent() {
       keterangan: row.keterangan || "Persentase",
       realisasi: row.realisasi !== null ? row.realisasi : row.target,
       cara_pengukuran: row.cara_pengukuran || "",
+      divisi: row.divisi || "Creative",
       data_source: row.data_source || "Manual",
       note: row.note || "",
     });
@@ -298,7 +303,7 @@ export default function KpiClientComponent() {
     e.preventDefault();
     if (!data || !editingRow) return;
 
-    const newScore = calculateRowScore(
+    const { skor: newScore, skor_akhir: newSkorAkhir } = calculateRowScore(
       formData.realisasi,
       formData.target,
       formData.cap,
@@ -312,14 +317,15 @@ export default function KpiClientComponent() {
           ...r,
           ...formData,
           skor: newScore,
-          nilai_akhir: newScore,
+          skor_akhir: newSkorAkhir,
+          nilai_akhir: newSkorAkhir,
         };
       }
       return r;
     });
 
     const total_bobot = updatedRows.reduce((sum, r) => sum + (Number(r.bobot) || 0), 0);
-    const total_nilai_akhir = updatedRows.reduce((sum, r) => sum + (Number(r.skor) || 0), 0);
+    const total_nilai_akhir = updatedRows.reduce((sum, r) => sum + (Number(r.skor_akhir ?? r.skor) || 0), 0);
 
     const updatedData: KpiApiResponse = {
       ...data,
@@ -346,7 +352,7 @@ export default function KpiClientComponent() {
       .map((r, idx) => ({ ...r, no: idx + 1 }));
 
     const total_bobot = updatedRows.reduce((sum, r) => sum + (Number(r.bobot) || 0), 0);
-    const total_nilai_akhir = updatedRows.reduce((sum, r) => sum + (Number(r.skor) || 0), 0);
+    const total_nilai_akhir = updatedRows.reduce((sum, r) => sum + (Number(r.skor_akhir ?? r.skor) || 0), 0);
 
     const updatedData: KpiApiResponse = {
       ...data,
@@ -363,6 +369,7 @@ export default function KpiClientComponent() {
     setDeleteTarget(null);
     toast.success("Indikator KPI berhasil dihapus.");
   };
+
 
   // Reset to Default Calculation
   const handleResetDefault = async () => {
@@ -418,41 +425,41 @@ export default function KpiClientComponent() {
       // Sheet 1: KPI Table
       const kpiRows = data.rows.map((row) => ({
         "No": row.no,
-        "Perspektif BSC": row.perspektif_bsc,
+        "Perspective BSC": row.perspektif_bsc,
         "Strategy": row.strategy,
         "Tujuan Strategi": row.tujuan_strategi,
         "Area Kinerja Utama": row.area_kinerja_utama,
         "Key Performance Indicators": row.kpi,
-        "Bobot (%)": row.bobot,
+        "Bobot": `${row.bobot}%`,
         "Polarity": row.polarity,
-        "Cap (%)": row.cap,
-        "Target (%)": row.target,
+        "Cap": `${row.cap}%`,
+        "Target": `${row.target}%`,
         "Keterangan": row.keterangan,
-        "Realisasi (%)": row.realisasi !== null ? row.realisasi : "-",
+        "Realisasi": row.realisasi !== null ? `${row.realisasi}%` : "-",
         "Skor": row.skor !== null ? row.skor.toFixed(2) : "-",
+        "Skor Akhir": row.skor_akhir !== null ? `${row.skor_akhir.toFixed(2)}%` : "-",
         "Cara Pengukuran": row.cara_pengukuran,
-        "Sumber Data": row.data_source,
-        "Note": row.note,
+        "Divisi": row.divisi || "Creative",
       }));
 
       // Add total row
       kpiRows.push({
         "No": "" as any,
-        "Perspektif BSC": "",
+        "Perspective BSC": "",
         "Strategy": "",
         "Tujuan Strategi": "",
         "Area Kinerja Utama": "",
-        "Key Performance Indicators": "TOTAL",
-        "Bobot (%)": data.total_bobot,
+        "Key Performance Indicators": "TOTAL BOBOT & NILAI AKHIR",
+        "Bobot": `${data.total_bobot}%`,
         "Polarity": "" as any,
-        "Cap (%)": "" as any,
-        "Target (%)": "" as any,
+        "Cap": "" as any,
+        "Target": "" as any,
         "Keterangan": "",
-        "Realisasi (%)": "" as any,
-        "Skor": data.total_nilai_akhir.toFixed(2) as any,
+        "Realisasi": "" as any,
+        "Skor": "" as any,
+        "Skor Akhir": `${data.total_nilai_akhir.toFixed(2)}%`,
         "Cara Pengukuran": "",
-        "Sumber Data": "",
-        "Note": "",
+        "Divisi": "",
       });
 
       // Sheet 2: Meta data
@@ -721,30 +728,112 @@ export default function KpiClientComponent() {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-xs border-collapse min-w-[1400px]">
+              <table className="w-full text-xs border-collapse min-w-[1600px]">
                 <thead>
-                  <tr className="bg-muted/60 border-b">
-                    <th className="px-3 py-2.5 text-center font-semibold border-r w-8">#</th>
-                    <th className="px-3 py-2.5 text-left font-semibold border-r min-w-[120px]">Perspektif BSC</th>
-                    <th className="px-3 py-2.5 text-left font-semibold border-r min-w-[180px]">Tujuan Strategi</th>
-                    <th className="px-3 py-2.5 text-left font-semibold border-r min-w-[110px]">Area Kinerja Utama</th>
-                    <th className="px-3 py-2.5 text-left font-semibold border-r min-w-[240px]">Key Performance Indicators</th>
-                    <th className="px-3 py-2.5 text-center font-semibold border-r w-16">Bobot</th>
-                    <th className="px-3 py-2.5 text-center font-semibold border-r w-16">Polarity</th>
-                    <th className="px-3 py-2.5 text-center font-semibold border-r w-12">Cap</th>
-                    <th className="px-3 py-2.5 text-center font-semibold border-r w-16">Target</th>
-                    <th className="px-3 py-2.5 text-center font-semibold border-r w-16">Keterangan</th>
-                    <th className="px-3 py-2.5 text-center font-semibold border-r w-20 bg-primary/5">Realisasi</th>
-                    <th className="px-3 py-2.5 text-center font-semibold border-r w-16 bg-primary/5">Skor</th>
-                    <th className="px-3 py-2.5 text-left font-semibold border-r min-w-[200px]">Cara Pengukuran</th>
-                    <th className="px-3 py-2.5 text-center font-semibold border-r w-20">Data</th>
-                    <th className="px-3 py-2.5 text-center font-semibold border-r w-10">Note</th>
-                    <th className="px-3 py-2.5 text-center font-semibold w-44">Aksi</th>
+                  <tr className="bg-[#ea580c] text-white border-b border-orange-700 shadow-xs">
+                    <th className="px-2.5 py-3 text-center font-bold border-r border-orange-600/70 w-12 whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>No</span>
+                        <span className="text-[10px] opacity-80">▾</span>
+                      </div>
+                    </th>
+                    <th className="px-3 py-3 text-left font-bold border-r border-orange-600/70 min-w-[140px] whitespace-nowrap">
+                      <div className="flex items-center justify-between gap-1">
+                        <span>Perspective BSC</span>
+                        <span className="text-[10px] opacity-80">▾</span>
+                      </div>
+                    </th>
+                    <th className="px-3 py-3 text-left font-bold border-r border-orange-600/70 min-w-[180px] whitespace-nowrap">
+                      <div className="flex items-center justify-between gap-1">
+                        <span>Strategy</span>
+                        <span className="text-[10px] opacity-80">▾</span>
+                      </div>
+                    </th>
+                    <th className="px-3 py-3 text-left font-bold border-r border-orange-600/70 min-w-[180px] whitespace-nowrap">
+                      <div className="flex items-center justify-between gap-1">
+                        <span>Tujuan Strategi</span>
+                        <span className="text-[10px] opacity-80">▾</span>
+                      </div>
+                    </th>
+                    <th className="px-3 py-3 text-left font-bold border-r border-orange-600/70 min-w-[120px] whitespace-nowrap">
+                      <div className="flex items-center justify-between gap-1">
+                        <span>Area Kinerja Utama</span>
+                        <span className="text-[10px] opacity-80">▾</span>
+                      </div>
+                    </th>
+                    <th className="px-3 py-3 text-left font-bold border-r border-orange-600/70 min-w-[220px] whitespace-nowrap">
+                      <div className="flex items-center justify-between gap-1">
+                        <span>Key Performance Indicators</span>
+                        <span className="text-[10px] opacity-80">▾</span>
+                      </div>
+                    </th>
+                    <th className="px-2 py-3 text-center font-bold border-r border-orange-600/70 w-16 whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>Bobot</span>
+                        <span className="text-[10px] opacity-80">▾</span>
+                      </div>
+                    </th>
+                    <th className="px-2 py-3 text-center font-bold border-r border-orange-600/70 w-16 whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>Polarity</span>
+                        <span className="text-[10px] opacity-80">▾</span>
+                      </div>
+                    </th>
+                    <th className="px-2 py-3 text-center font-bold border-r border-orange-600/70 w-14 whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>Cap</span>
+                        <span className="text-[10px] opacity-80">▾</span>
+                      </div>
+                    </th>
+                    <th className="px-2 py-3 text-center font-bold border-r border-orange-600/70 w-16 whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>Target</span>
+                        <span className="text-[10px] opacity-80">▾</span>
+                      </div>
+                    </th>
+                    <th className="px-2.5 py-3 text-center font-bold border-r border-orange-600/70 w-24 whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>Keterangan</span>
+                        <span className="text-[10px] opacity-80">▾</span>
+                      </div>
+                    </th>
+                    <th className="px-3 py-3 text-center font-bold border-r border-orange-600/70 w-24 whitespace-nowrap bg-orange-700/80">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>Realisasi</span>
+                        <span className="text-[10px] opacity-80">▾</span>
+                      </div>
+                    </th>
+                    <th className="px-3 py-3 text-center font-bold border-r border-orange-600/70 w-20 whitespace-nowrap bg-orange-700/80">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>Skor</span>
+                        <span className="text-[10px] opacity-80">▾</span>
+                      </div>
+                    </th>
+                    <th className="px-3 py-3 text-center font-bold border-r border-orange-600/70 w-24 whitespace-nowrap bg-orange-800/90">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>Skor Akhir</span>
+                        <span className="text-[10px] opacity-80">▾</span>
+                      </div>
+                    </th>
+                    <th className="px-3 py-3 text-left font-bold border-r border-orange-600/70 min-w-[220px] whitespace-nowrap">
+                      <div className="flex items-center justify-between gap-1">
+                        <span>Cara Pengukuran</span>
+                        <span className="text-[10px] opacity-80">▾</span>
+                      </div>
+                    </th>
+                    <th className="px-3 py-3 text-center font-bold border-r border-orange-600/70 w-24 whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1">
+                        <span>Divisi</span>
+                        <span className="text-[10px] opacity-80">▾</span>
+                      </div>
+                    </th>
+                    <th className="px-3 py-3 text-center font-bold w-44 whitespace-nowrap">
+                      <span>Aksi</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.rows.map((row, index) => {
-                    const realisasiClass = getRealisasiBadgeClass(row.realisasi, row.target);
                     const bscClass = getBscBadgeClass(row.perspektif_bsc);
                     const isAboveTarget = row.realisasi !== null && row.realisasi >= row.target;
                     return (
@@ -752,10 +841,10 @@ export default function KpiClientComponent() {
                         key={row.id}
                         className={`border-b transition-colors hover:bg-muted/30 ${index % 2 === 0 ? "bg-background" : "bg-muted/10"}`}
                       >
-                        {/* # */}
-                        <td className="px-3 py-3 text-center font-medium border-r text-muted-foreground">{row.no}</td>
+                        {/* 1. No */}
+                        <td className="px-2.5 py-3 text-center font-medium border-r text-muted-foreground">{row.no}</td>
 
-                        {/* Perspektif BSC */}
+                        {/* 2. Perspective BSC */}
                         <td className="px-3 py-3 border-r">
                           <Badge
                             variant="outline"
@@ -765,22 +854,27 @@ export default function KpiClientComponent() {
                           </Badge>
                         </td>
 
-                        {/* Tujuan Strategi */}
+                        {/* 3. Strategy */}
+                        <td className="px-3 py-3 border-r text-muted-foreground leading-relaxed">
+                          {row.strategy || "—"}
+                        </td>
+
+                        {/* 4. Tujuan Strategi */}
                         <td className="px-3 py-3 border-r text-muted-foreground leading-relaxed">
                           {row.tujuan_strategi}
                         </td>
 
-                        {/* Area Kinerja Utama */}
+                        {/* 5. Area Kinerja Utama */}
                         <td className="px-3 py-3 border-r font-medium">{row.area_kinerja_utama}</td>
 
-                        {/* KPI */}
+                        {/* 6. Key Performance Indicators */}
                         <td className="px-3 py-3 border-r font-medium text-foreground leading-relaxed">{row.kpi}</td>
 
-                        {/* Bobot */}
-                        <td className="px-3 py-3 text-center border-r font-semibold">{row.bobot}%</td>
+                        {/* 7. Bobot */}
+                        <td className="px-2 py-3 text-center border-r font-semibold">{row.bobot}%</td>
 
-                        {/* Polarity */}
-                        <td className="px-3 py-3 text-center border-r">
+                        {/* 8. Polarity */}
+                        <td className="px-2 py-3 text-center border-r">
                           <span className={`inline-flex items-center gap-0.5 font-medium ${row.polarity === "Max" ? "text-emerald-600" : "text-rose-600"}`}>
                             {row.polarity === "Max"
                               ? <TrendingUp className="h-3 w-3" />
@@ -789,27 +883,26 @@ export default function KpiClientComponent() {
                           </span>
                         </td>
 
-                        {/* Cap */}
-                        <td className="px-3 py-3 text-center border-r text-muted-foreground">{row.cap}%</td>
+                        {/* 9. Cap */}
+                        <td className="px-2 py-3 text-center border-r text-muted-foreground">{row.cap}%</td>
 
-                        {/* Target */}
-                        <td className="px-3 py-3 text-center border-r font-semibold text-primary">{row.target}%</td>
+                        {/* 10. Target */}
+                        <td className="px-2 py-3 text-center border-r font-semibold text-primary">{row.target}%</td>
 
-                        {/* Keterangan */}
-                        <td className="px-3 py-3 text-center border-r text-muted-foreground text-[11px]">{row.keterangan}</td>
+                        {/* 11. Keterangan */}
+                        <td className="px-2.5 py-3 text-center border-r text-muted-foreground text-[11px]">{row.keterangan}</td>
 
-                        {/* Realisasi */}
+                        {/* 12. Realisasi */}
                         <td className="px-3 py-3 text-center border-r bg-primary/5">
                           {row.realisasi !== null ? (
                             <div className="flex flex-col items-center gap-1">
                               <span className={`font-bold text-sm ${isAboveTarget ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
                                 {row.realisasi}%
                               </span>
-                              {/* Progress bar */}
                               <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
                                 <div
                                   className={`h-full rounded-full transition-all ${isAboveTarget ? "bg-emerald-500" : "bg-rose-500"}`}
-                                  style={{ width: `${Math.min(100, row.realisasi)}%` }}
+                                  style={{ width: `${Math.min(100, (row.realisasi / row.target) * 100)}%` }}
                                 />
                               </div>
                             </div>
@@ -818,34 +911,37 @@ export default function KpiClientComponent() {
                           )}
                         </td>
 
-                        {/* Skor */}
+                        {/* 13. Skor */}
                         <td className="px-3 py-3 text-center border-r bg-primary/5">
                           {row.skor !== null ? (
-                            <span className="font-semibold text-primary">{row.skor.toFixed(2)}</span>
+                            <span className="font-semibold text-foreground">{row.skor.toFixed(1)}</span>
                           ) : (
                             <span className="text-muted-foreground/50 text-[10px]">—</span>
                           )}
                         </td>
 
-                        {/* Cara Pengukuran */}
+                        {/* 14. Skor Akhir */}
+                        <td className="px-3 py-3 text-center border-r bg-primary/10">
+                          {row.skor_akhir !== null ? (
+                            <span className="font-bold text-sm text-primary">{row.skor_akhir.toFixed(2)}%</span>
+                          ) : (
+                            <span className="text-muted-foreground/50 text-[10px]">—</span>
+                          )}
+                        </td>
+
+                        {/* 15. Cara Pengukuran */}
                         <td className="px-3 py-3 border-r text-muted-foreground leading-relaxed text-[11px]">
                           {row.cara_pengukuran}
                         </td>
 
-                        {/* Data Source */}
+                        {/* 16. Divisi */}
                         <td className="px-3 py-3 text-center border-r">
-                          <Badge
-                            variant="outline"
-                            className={`text-[9px] font-medium leading-tight ${DATA_SOURCE_COLORS[row.data_source] || "bg-muted/50"}`}
-                          >
-                            {row.data_source}
+                          <Badge variant="secondary" className="text-[10px] font-medium whitespace-nowrap">
+                            {row.divisi || "Creative"}
                           </Badge>
                         </td>
 
-                        {/* Note */}
-                        <td className="px-3 py-3 text-center border-r text-muted-foreground text-[11px] font-medium">{row.note}</td>
-
-                        {/* Aksi: 1. Detail, 2. Edit, 3. Delete */}
+                        {/* 17. Aksi: 1. Detail, 2. Edit, 3. Delete */}
                         <td className="px-3 py-3 text-center whitespace-nowrap">
                           <div className="flex items-center justify-center gap-1.5">
                             <Button
@@ -884,20 +980,20 @@ export default function KpiClientComponent() {
                   })}
 
                   {/* TOTAL ROW */}
-                  <tr className="border-t-2 border-primary/20 bg-primary/5 font-semibold">
-                    <td colSpan={5} className="px-3 py-3 border-r text-right text-sm font-bold uppercase tracking-wide text-foreground">
+                  <tr className="border-t-2 border-orange-500 bg-primary/5 font-semibold">
+                    <td colSpan={6} className="px-3 py-3 border-r text-right text-sm font-bold uppercase tracking-wide text-foreground">
                       Total Bobot & Nilai Akhir
                     </td>
                     <td className="px-3 py-3 text-center border-r font-bold text-foreground">
                       {data.total_bobot}%
                     </td>
-                    <td colSpan={5} className="px-3 py-3 border-r" />
-                    <td className="px-3 py-3 text-center border-r bg-primary/10">
+                    <td colSpan={6} className="px-3 py-3 border-r" />
+                    <td className="px-3 py-3 text-center border-r bg-primary/15">
                       <span className={`text-base font-bold ${scoreCategory.color}`}>
                         {data.total_nilai_akhir.toFixed(2)}%
                       </span>
                     </td>
-                    <td colSpan={4} />
+                    <td colSpan={3} />
                   </tr>
                 </tbody>
               </table>
@@ -1016,6 +1112,9 @@ export default function KpiClientComponent() {
                   <Badge variant="outline" className={`text-xs ${getBscBadgeClass(detailRow.perspektif_bsc)}`}>
                     {detailRow.perspektif_bsc}
                   </Badge>
+                  <Badge variant="secondary" className="text-xs">
+                    {detailRow.divisi || "Creative"}
+                  </Badge>
                   <Badge variant="outline" className={`text-xs ${DATA_SOURCE_COLORS[detailRow.data_source] || "bg-muted/50"}`}>
                     {detailRow.data_source}
                   </Badge>
@@ -1060,14 +1159,16 @@ export default function KpiClientComponent() {
                     </div>
                   </div>
                   <div className="rounded-lg border bg-primary/5 border-primary/20 p-3 text-center">
-                    <div className="text-[11px] font-medium text-muted-foreground uppercase">Skor KPI</div>
-                    <div className="text-lg font-bold text-primary mt-0.5">
-                      {detailRow.skor !== null ? detailRow.skor.toFixed(2) : "—"}
+                    <div className="text-[11px] font-medium text-muted-foreground uppercase">Skor Capaian</div>
+                    <div className="text-lg font-bold text-foreground mt-0.5">
+                      {detailRow.skor !== null ? detailRow.skor.toFixed(1) : "—"}
                     </div>
                   </div>
-                  <div className="rounded-lg border bg-muted/30 p-3 text-center">
-                    <div className="text-[11px] font-medium text-muted-foreground uppercase">Kode Note</div>
-                    <div className="text-lg font-bold text-foreground mt-0.5">{detailRow.note || "—"}</div>
+                  <div className="rounded-lg border bg-primary/10 border-primary/30 p-3 text-center">
+                    <div className="text-[11px] font-medium text-muted-foreground uppercase">Skor Akhir</div>
+                    <div className="text-lg font-bold text-primary mt-0.5">
+                      {detailRow.skor_akhir !== null ? `${detailRow.skor_akhir.toFixed(2)}%` : "—"}
+                    </div>
                   </div>
                 </div>
 
@@ -1090,6 +1191,16 @@ export default function KpiClientComponent() {
                     </div>
                   </div>
                 )}
+
+                {/* Strategy */}
+                <div className="space-y-1.5 p-3 rounded-lg border bg-card">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Strategy
+                  </div>
+                  <p className="text-foreground leading-relaxed">
+                    {detailRow.strategy || "—"}
+                  </p>
+                </div>
 
                 {/* Tujuan Strategi */}
                 <div className="space-y-1.5 p-3 rounded-lg border bg-card">
@@ -1170,7 +1281,7 @@ export default function KpiClientComponent() {
           </DialogHeader>
 
           <form onSubmit={handleSaveEdit} className="space-y-4 py-2">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {/* Perspektif BSC */}
               <div className="space-y-1.5">
                 <Label htmlFor="edit-bsc" className="text-xs">Perspektif BSC</Label>
@@ -1188,6 +1299,19 @@ export default function KpiClientComponent() {
                     <SelectItem value="Financial">Financial</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Divisi */}
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-divisi" className="text-xs">Divisi</Label>
+                <Input
+                  id="edit-divisi"
+                  value={formData.divisi}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, divisi: e.target.value }))}
+                  className="h-9"
+                  placeholder="Creative"
+                  required
+                />
               </div>
 
               {/* Data Source */}
@@ -1233,6 +1357,18 @@ export default function KpiClientComponent() {
                 rows={2}
                 className="resize-none text-xs"
                 required
+              />
+            </div>
+
+            {/* Strategy */}
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-strategy" className="text-xs">Strategy</Label>
+              <Textarea
+                id="edit-strategy"
+                value={formData.strategy}
+                onChange={(e) => setFormData((prev) => ({ ...prev, strategy: e.target.value }))}
+                rows={2}
+                className="resize-none text-xs"
               />
             </div>
 
@@ -1371,18 +1507,31 @@ export default function KpiClientComponent() {
             </div>
 
             {/* Preview Nilai Terhitung */}
-            <div className="rounded-lg bg-primary/5 border border-primary/20 p-2.5 flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">Kalkulasi Skor Terhitung:</span>
-              <span className="font-bold text-sm text-primary">
-                {calculateRowScore(
-                  formData.realisasi,
-                  formData.target,
-                  formData.cap,
-                  formData.bobot,
-                  formData.polarity
-                )?.toFixed(2) || "0.00"}
-              </span>
-            </div>
+            {(() => {
+              const calc = calculateRowScore(
+                formData.realisasi,
+                formData.target,
+                formData.cap,
+                formData.bobot,
+                formData.polarity
+              );
+              return (
+                <div className="rounded-lg bg-primary/5 border border-primary/20 p-2.5 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Skor Capaian:</span>
+                    <span className="font-bold text-foreground">
+                      {calc.skor !== null ? `${calc.skor.toFixed(1)}%` : "0%"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground">Skor Akhir (Tertimbang):</span>
+                    <span className="font-bold text-sm text-primary">
+                      {calc.skor_akhir !== null ? `${calc.skor_akhir.toFixed(2)}%` : "0.00%"}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setEditingRow(null)}>

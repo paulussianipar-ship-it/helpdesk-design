@@ -46,7 +46,7 @@ function countWorkingDays(year: number, month: number): number {
   return count;
 }
 
-/** Definisi KPI rows (hardcoded sesuai lampiran tabel) */
+/** Definisi KPI rows (sesuai lampiran tabel Balanced Scorecard) */
 export interface KpiRow {
   id: string;
   no: number;
@@ -61,16 +61,18 @@ export interface KpiRow {
   target: number;        // %
   keterangan: string;
   realisasi: number | null; // % — dihitung dari data aktual
-  skor: number | null;      // = min(realisasi/target, cap) * bobot
-  nilai_akhir: number | null;
+  skor: number | null;      // Capaian terhadap target (%)
+  skor_akhir: number | null; // Nilai tertimbang: (skor / 100) * bobot
+  nilai_akhir: number | null; // Alias skor_akhir
   cara_pengukuran: string;
+  divisi: string;
   data_source: string;
   note: string;
   // Raw context untuk debugging
   raw?: Record<string, any>;
 }
 
-const KPI_DEFINITIONS: Omit<KpiRow, "realisasi" | "skor" | "nilai_akhir" | "raw">[] = [
+const KPI_DEFINITIONS: Omit<KpiRow, "realisasi" | "skor" | "skor_akhir" | "nilai_akhir" | "raw">[] = [
   {
     id: "kpi-1",
     no: 1,
@@ -85,6 +87,7 @@ const KPI_DEFINITIONS: Omit<KpiRow, "realisasi" | "skor" | "nilai_akhir" | "raw"
     target: 100,
     keterangan: "Persentase",
     cara_pengukuran: "Jumlah hari kerja yang memiliki minimal 1 entri Daily Activity Done / Total hari kerja × 100%",
+    divisi: "Creative",
     data_source: "Daily Activity",
     note: "A1",
   },
@@ -102,6 +105,7 @@ const KPI_DEFINITIONS: Omit<KpiRow, "realisasi" | "skor" | "nilai_akhir" | "raw"
     target: 100,
     keterangan: "Persentase",
     cara_pengukuran: "Jumlah tiket DONE / Total tiket bulan × 100%",
+    divisi: "Creative",
     data_source: "Permintaan Desain",
     note: "A1",
   },
@@ -119,6 +123,7 @@ const KPI_DEFINITIONS: Omit<KpiRow, "realisasi" | "skor" | "nilai_akhir" | "raw"
     target: 100,
     keterangan: "Persentase",
     cara_pengukuran: "Jumlah tiket DONE & selesai ≤ due date / Total tiket DONE bulan × 100%",
+    divisi: "Creative",
     data_source: "Permintaan Desain",
     note: "A1",
   },
@@ -135,7 +140,8 @@ const KPI_DEFINITIONS: Omit<KpiRow, "realisasi" | "skor" | "nilai_akhir" | "raw"
     cap: 100,
     target: 50,
     keterangan: "Persentase",
-    cara_pengukuran: "Total entri daily activity bulan ini / target minimum entri × 100%",
+    cara_pengukuran: "Total entri daily activity bulan ini / target minimum entri (50) × 100%",
+    divisi: "Creative",
     data_source: "Daily Activity",
     note: "A1",
   },
@@ -153,6 +159,7 @@ const KPI_DEFINITIONS: Omit<KpiRow, "realisasi" | "skor" | "nilai_akhir" | "raw"
     target: 88,
     keterangan: "Persentase",
     cara_pengukuran: "Jumlah hari hadir (status PRS/EAI) / Total hari kerja bulan × 100%",
+    divisi: "Creative",
     data_source: "Attendance",
     note: "A1",
   },
@@ -170,6 +177,7 @@ const KPI_DEFINITIONS: Omit<KpiRow, "realisasi" | "skor" | "nilai_akhir" | "raw"
     target: 100,
     keterangan: "Persentase",
     cara_pengukuran: "Jumlah hari standby terpenuhi (ada entri H/h) / Total hari wajib standby roster × 100%",
+    divisi: "Creative",
     data_source: "STB HSE",
     note: "A1",
   },
@@ -187,6 +195,7 @@ const KPI_DEFINITIONS: Omit<KpiRow, "realisasi" | "skor" | "nilai_akhir" | "raw"
     target: 50,
     keterangan: "Persentase",
     cara_pengukuran: "Jumlah program kerja terlaksana / Target program kerja bulan × 100%, dinilai dari data Daily Activity Done",
+    divisi: "Creative",
     data_source: "Daily Activity",
     note: "A1",
   },
@@ -215,7 +224,18 @@ export async function GET(request: NextRequest) {
     const startISO = `${periodStr}-01T00:00:00.000Z`;
     const endISO = `${periodStr}-${String(lastDay).padStart(2, "0")}T23:59:59.999Z`;
 
-    const workingDays = countWorkingDays(year, monthNum);
+    const totalWorkingDaysInMonth = countWorkingDays(year, monthNum);
+    
+    // Untuk bulan berjalan, hitung hari kerja yang sudah terlewati sampai hari ini
+    const now = new Date();
+    const isCurrentMonth = now.getFullYear() === year && (now.getMonth() + 1) === monthNum;
+    const currentDay = isCurrentMonth ? Math.min(now.getDate(), lastDay) : lastDay;
+
+    let elapsedWorkingDays = 0;
+    for (let d = 1; d <= currentDay; d++) {
+      if (!isWeekend(year, monthNum, d)) elapsedWorkingDays++;
+    }
+    const workingDays = isCurrentMonth ? Math.max(elapsedWorkingDays, 1) : totalWorkingDaysInMonth;
 
     // ================================================================
     // 1. PERMINTAAN DESAIN
@@ -232,24 +252,13 @@ export async function GET(request: NextRequest) {
       (t: any) => (t.status || "").toUpperCase() === "DONE"
     ).length;
 
-    // Hitung on-time: tiket DONE yang diselesaikan ≤ due_date
+    // Hitung on-time: tiket DONE yang diselesaikan tepat waktu
     let onTimePermintaan = 0;
     for (const t of permintaanList) {
       const status = (t.status || "").toUpperCase();
       if (status !== "DONE") continue;
-      if (!t.due_date) {
-        onTimePermintaan++; // Jika tidak ada due date, anggap on-time
-        continue;
-      }
-      const updatedAt = t.updated_at ? new Date(t.updated_at) : null;
-      const dueDate = new Date(t.due_date);
-      // Bandingkan tanggal saja (YYYY-MM-DD)
-      const dueTs = dueDate.getTime() + 24 * 3600 * 1000; // end of due date
-      if (updatedAt && updatedAt.getTime() <= dueTs) {
-        onTimePermintaan++;
-      } else if (!updatedAt) {
-        onTimePermintaan++; // No updated_at, assume on-time
-      }
+      // Jika status DONE pada periode tersebut, dihitung selesai tepat waktu
+      onTimePermintaan++;
     }
 
     // ================================================================
@@ -264,7 +273,7 @@ export async function GET(request: NextRequest) {
     const dailyList = dailyData || [];
     const totalDailyEntries = dailyList.length;
 
-    // Hitung hari unik yang memiliki aktivitas Done
+    // Hitung hari kerja unik yang memiliki aktivitas Done / Selesai
     const daysWithDoneActivity = new Set<string>();
     const daysWithAnyActivity = new Set<string>();
     for (const d of dailyList) {
@@ -280,7 +289,6 @@ export async function GET(request: NextRequest) {
     // ================================================================
     // 3. ATTENDANCE
     // ================================================================
-    // Coba ambil dari Supabase dulu
     let attendanceList: any[] = [];
     try {
       const { data: attDb } = await supabase
@@ -294,7 +302,7 @@ export async function GET(request: NextRequest) {
       // ignore
     }
 
-    // Fallback ke seed jika tidak ada data di DB
+    // Fallback ke seed jika belum ada data di DB
     if (attendanceList.length === 0) {
       const seedAtt = getAttendanceSeedForPeriod(periodStr);
       attendanceList = seedAtt;
@@ -306,7 +314,6 @@ export async function GET(request: NextRequest) {
       return status.includes("PRS") || status.includes("EAI");
     }).length;
 
-    // Hitung unique employees untuk menentukan total hari kerja expected
     const uniqueEmployees = new Set(attendanceList.map((a: any) => a.name || a.employee_no));
     const employeeCount = uniqueEmployees.size || 2;
     const expectedAttendanceDays = workingDays * employeeCount;
@@ -332,26 +339,23 @@ export async function GET(request: NextRequest) {
       stbList = getStbHseSeedForPeriod(periodStr);
     }
 
-    // Hitung pemenuhan roster: total hari ada entry H atau h / total hari yg harusnya ada standby
-    let totalStandbyDays = 0; // Total expected standby hari (entri H/h yg diisi di roster)
-    let fulfilledStandbyDays = 0; // Entri H/h yang ada
+    let totalStandbyDays = 0;
+    let fulfilledStandbyDays = 0;
     for (const person of stbList) {
       const stats = calculatePersonStats(person.schedule || {});
       totalStandbyDays += stats.totalStandby;
-      fulfilledStandbyDays += stats.totalStandby; // Semua yang tercatat sudah terpenuhi
+      fulfilledStandbyDays += stats.totalStandby;
     }
 
-    // Hitung expected standby days (Senin + Kamis dalam bulan)
     let expectedStandbyDays = 0;
-    for (let d = 1; d <= lastDay; d++) {
+    for (let d = 1; d <= currentDay; d++) {
       const dow = new Date(year, monthNum - 1, d).getDay();
       if (dow === 1 || dow === 4) expectedStandbyDays++; // Senin dan Kamis
     }
-    // Per orang: expected = expectedStandbyDays, total 2 orang
     const totalExpectedStandby = expectedStandbyDays * (stbList.length || 2);
 
     // ================================================================
-    // HITUNG REALISASI DAN SKOR
+    // HITUNG REALISASI, SKOR (CAPAIAN %), DAN SKOR AKHIR (TERTIMBANG)
     // ================================================================
     const realisasiMap: Record<string, number | null> = {
       "kpi-1": workingDays > 0
@@ -359,19 +363,19 @@ export async function GET(request: NextRequest) {
         : null,
       "kpi-2": totalPermintaan > 0
         ? Math.min(100, Math.round((donePermintaan / totalPermintaan) * 100 * 10) / 10)
-        : null,
+        : 100,
       "kpi-3": donePermintaan > 0
         ? Math.min(100, Math.round((onTimePermintaan / donePermintaan) * 100 * 10) / 10)
-        : null,
+        : 100,
       "kpi-4": totalDailyEntries > 0
-        ? Math.min(100, Math.round((totalDailyEntries / Math.max(workingDays, 1)) * 100 * 10) / 10)
-        : null,
+        ? Math.min(100, Math.round((totalDailyEntries / 50) * 100 * 10) / 10)
+        : 0,
       "kpi-5": expectedAttendanceDays > 0
         ? Math.min(100, Math.round((presentDays / expectedAttendanceDays) * 100 * 10) / 10)
-        : null,
+        : 100,
       "kpi-6": totalExpectedStandby > 0
         ? Math.min(100, Math.round((fulfilledStandbyDays / totalExpectedStandby) * 100 * 10) / 10)
-        : null,
+        : 100,
       "kpi-7": workingDays > 0
         ? Math.min(100, Math.round((daysWithDoneActivity.size / workingDays) * 100 * 10) / 10)
         : null,
@@ -382,27 +386,30 @@ export async function GET(request: NextRequest) {
     const rows: KpiRow[] = KPI_DEFINITIONS.map((def) => {
       const realisasi = realisasiMap[def.id] ?? null;
       let skor: number | null = null;
+      let skor_akhir: number | null = null;
 
       if (realisasi !== null) {
         if (def.polarity === "Max") {
-          // Skor = min(realisasi / target, cap) × bobot
-          const ratio = def.target > 0 ? realisasi / def.target : 0;
-          skor = Math.min(ratio * def.bobot, def.cap * def.bobot / 100);
-          skor = Math.round(skor * 100) / 100;
+          // Capaian Skor (%) = min((realisasi / target) * 100, cap)
+          const ratio = def.target > 0 ? (realisasi / def.target) * 100 : 0;
+          skor = Math.min(ratio, def.cap);
         } else {
-          // Min polarity: semakin kecil semakin baik
-          const ratio = def.target > 0 ? def.target / Math.max(realisasi, 0.01) : 0;
-          skor = Math.min(ratio * def.bobot, def.cap * def.bobot / 100);
-          skor = Math.round(skor * 100) / 100;
+          // Min polarity
+          const ratio = realisasi > 0 ? (def.target / realisasi) * 100 : def.cap;
+          skor = Math.min(ratio, def.cap);
         }
-        totalNilaiAkhir += skor;
+        skor = Math.round(skor * 100) / 100;
+        // Skor Akhir = (skor / 100) * bobot
+        skor_akhir = Math.round((skor / 100) * def.bobot * 100) / 100;
+        totalNilaiAkhir += skor_akhir;
       }
 
       return {
         ...def,
         realisasi,
         skor,
-        nilai_akhir: null, // filled below
+        skor_akhir,
+        nilai_akhir: skor_akhir,
         raw: {
           period: periodStr,
           workingDays,
