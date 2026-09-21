@@ -110,10 +110,10 @@ export function countAttendance(rows: AttendanceRow[]) {
   let overtimeMinutes = 0;
   rows.forEach((r) => {
     const s = (r.status || "").toUpperCase();
-    if (s.includes("PRS")) prs++;
-    if (s.includes("OFF")) off++;
-    if (s.includes("ABS")) abs++;
-    if (s.includes("OVT")) ovt++;
+    if (s.includes("PRS") || s.includes("HADIR")) prs++;
+    if (s.includes("OFF") || s.includes("LIBUR")) off++;
+    if (s.includes("ABS") || s.includes("ALPA") || s.includes("IJIN") || s.includes("SAKIT")) abs++;
+    if (s.includes("OVT") || Number(r.overtime) > 0) ovt++;
     overtimeMinutes += Number(r.overtime) || 0;
   });
   return { total: rows.length, prs, off, abs, ovt, overtimeMinutes };

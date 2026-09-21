@@ -2102,11 +2102,12 @@ notify pgrst, 'reload schema';`;
               </div>
               <div>
                 <Label className="text-xs font-semibold">Keterangan</Label>
-                <Input
+                <Textarea
                   placeholder="Catatan tambahan / revisi"
                   value={formData.keterangan || ""}
                   onChange={(e) => setFormData({ ...formData, keterangan: e.target.value })}
-                  className="mt-1 h-9 text-xs"
+                  className="mt-1 text-xs resize-none min-h-[80px]"
+                  rows={3}
                 />
               </div>
             </div>

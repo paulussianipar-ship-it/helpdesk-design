@@ -152,13 +152,26 @@ export function RiwayatClientContent() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex-grow">
-                <div className="flex items-center gap-2 mb-4">
-                  <Star className="h-6 w-6 text-yellow-400 fill-yellow-400" />
-                  <span className="text-xl font-bold">{item.rating}</span>
-                  <span className="text-muted-foreground">/ 10</span>
+                <div className="flex flex-col gap-2 mb-3">
+                  <div className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <Star
+                        key={star}
+                        className={`h-5 w-5 ${
+                          star <= Number(item.rating)
+                            ? "fill-yellow-400 text-yellow-400"
+                            : "text-muted-foreground/25 fill-muted-foreground/10"
+                        }`}
+                      />
+                    ))}
+                    <span className="ml-1 text-sm font-bold text-foreground">
+                      {item.rating}
+                      <span className="font-normal text-muted-foreground"> / 5</span>
+                    </span>
+                  </div>
                 </div>
                 <blockquote className="border-l-2 pl-4 italic text-sm text-muted-foreground line-clamp-4">
-                  {item.review || "Tidak ada review yang diberikan."}
+                  {item.review || "Tidak ada ulasan yang diberikan."}
                 </blockquote>
               </CardContent>
               <CardFooter>

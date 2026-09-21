@@ -186,3 +186,78 @@ export function detectYearFromText(text: string): number | null {
   return match ? parseInt(match[1], 10) : null;
 }
 
+/**
+ * Buat jadwal roster standby operasional untuk 1 bulan tertentu (Paulus & Farel)
+ * Hari Senin: Shift Siang (H), Hari Kamis: Shift Malam (h)
+ */
+export function getStbHseSeedForPeriod(period: string): StbHseRosterRecord[] {
+  if (period === "2026-06") {
+    return INITIAL_STB_HSE_DATA;
+  }
+
+  const [yearStr, monthStr] = period.split("-");
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
+  if (!year || !month || month < 1 || month > 12) {
+    return [];
+  }
+
+  const totalDays = getDaysInMonth(year, month);
+  const paulusSchedule: Record<number, string> = {};
+  const farelSchedule: Record<number, string> = {};
+
+  for (let d = 1; d <= totalDays; d++) {
+    const dateObj = new Date(year, month - 1, d);
+    const dayOfWeek = dateObj.getDay(); // 0 = Sun, 1 = Mon, ..., 4 = Thu
+
+    if (dayOfWeek === 1) {
+      // Senin: Shift Siang H
+      paulusSchedule[d] = "H";
+      farelSchedule[d] = "H";
+    } else if (dayOfWeek === 4) {
+      // Kamis: Shift Malam h
+      paulusSchedule[d] = "h";
+      farelSchedule[d] = "h";
+    }
+  }
+
+  return [
+    {
+      id: `stb-${period}-01`,
+      period_month: period,
+      employee_no: "GIS19040039",
+      name: "Paulus Petrus Parlindungan Sianipar",
+      role: "HSE Coordinator",
+      phone: "0812-3456-7890",
+      schedule: paulusSchedule,
+      notes: `Roster Standby HSE ${formatMonthYearIndo(period)}`,
+      created_at: new Date(year, month - 1, 1).toISOString(),
+      updated_at: new Date(year, month - 1, 1).toISOString(),
+    },
+    {
+      id: `stb-${period}-02`,
+      period_month: period,
+      employee_no: "GIS25100212",
+      name: "Muhammad Farel Ramadhan",
+      role: "HSE Officer",
+      phone: "0813-9876-5432",
+      schedule: farelSchedule,
+      notes: `Roster Standby HSE ${formatMonthYearIndo(period)}`,
+      created_at: new Date(year, month - 1, 1).toISOString(),
+      updated_at: new Date(year, month - 1, 1).toISOString(),
+    },
+  ];
+}
+
+/**
+ * Dapatkan seluruh data roster standby tahunan terintegrasi (Jan - Des)
+ */
+export function getAllStbHseSeedData(year: number = 2026): StbHseRosterRecord[] {
+  const result: StbHseRosterRecord[] = [];
+  for (let m = 1; m <= 12; m++) {
+    const period = `${year}-${String(m).padStart(2, "0")}`;
+    result.push(...getStbHseSeedForPeriod(period));
+  }
+  return result;
+}
+

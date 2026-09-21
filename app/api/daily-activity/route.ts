@@ -56,6 +56,8 @@ export async function GET(request: NextRequest) {
   }
 }
 
+const DEFAULT_USER_ID = "bcfdf89c-d1e2-4602-80aa-005a1beb1d3c";
+
 // POST /api/daily-activity (insert single or batch)
 export async function POST(request: NextRequest) {
   try {
@@ -63,9 +65,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     if (Array.isArray(body)) {
+      const sanitized = body.map((item) => ({
+        ...item,
+        user_id: item.user_id || DEFAULT_USER_ID,
+      }));
       const { data, error } = await supabase
         .from("daily_activities")
-        .insert(body)
+        .insert(sanitized)
         .select();
 
       if (error) throw error;
@@ -73,9 +79,13 @@ export async function POST(request: NextRequest) {
     }
 
     if (body.items && Array.isArray(body.items)) {
+      const sanitized = body.items.map((item: any) => ({
+        ...item,
+        user_id: item.user_id || DEFAULT_USER_ID,
+      }));
       const { data, error } = await supabase
         .from("daily_activities")
-        .insert(body.items)
+        .insert(sanitized)
         .select();
 
       if (error) throw error;
@@ -94,7 +104,7 @@ export async function POST(request: NextRequest) {
     const { data, error } = await supabase
       .from("daily_activities")
       .insert({
-        user_id: user_id || null,
+        user_id: user_id || DEFAULT_USER_ID,
         activity_date,
         name,
         task_description,

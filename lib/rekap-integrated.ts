@@ -1,5 +1,4 @@
 import * as XLSX from "xlsx";
-import { createClient } from "@/lib/supabase/client";
 import {
   INITIAL_ATTENDANCE_DATA,
   type AttendanceRecord,
@@ -128,349 +127,274 @@ function readLocalJSON<T>(key: string): T | null {
   }
 }
 
-// Baseline data bulanan 2026 untuk Permintaan Design & fallback sinkronisasi
-const BASELINE_PERMINTAAN_2026: Record<
-  number,
-  {
-    masuk: number;
-    selesai: number;
-    durasi: number;
-    eskalasi: number;
-    slaPct: number;
-    statuses: Record<string, number>;
-  }
-> = {
-  1: { masuk: 92, selesai: 90, durasi: 30.1, eskalasi: 0, slaPct: 77.8, statuses: { DONE: 90, PROGRESS: 2 } },
-  2: { masuk: 67, selesai: 59, durasi: 8.8, eskalasi: 1, slaPct: 88.1, statuses: { DONE: 59, PROGRESS: 4, REVISION: 1 } },
-  3: { masuk: 26, selesai: 34, durasi: 59.0, eskalasi: 1, slaPct: 52.9, statuses: { DONE: 34, PROGRESS: 1 } },
-  4: { masuk: 53, selesai: 47, durasi: 18.1, eskalasi: 0, slaPct: 59.6, statuses: { DONE: 47, "TO DO": 3 } },
-  5: { masuk: 26, selesai: 31, durasi: 35.5, eskalasi: 0, slaPct: 51.6, statuses: { DONE: 31, REVIEW: 2 } },
-  6: { masuk: 46, selesai: 45, durasi: 8.6, eskalasi: 0, slaPct: 77.8, statuses: { DONE: 45, PROGRESS: 1 } },
-  7: { masuk: 50, selesai: 50, durasi: 9.1, eskalasi: 1, slaPct: 72.0, statuses: { DONE: 50 } },
-  8: { masuk: 42, selesai: 43, durasi: 5.3, eskalasi: 0, slaPct: 83.7, statuses: { DONE: 43, PROGRESS: 1 } },
-  9: { masuk: 64, selesai: 58, durasi: 5.8, eskalasi: 3, slaPct: 86.2, statuses: { DONE: 58, "TO DO": 3, PROGRESS: 3 } },
-};
-
 export async function fetchIntegratedRekap(year: number = 2026): Promise<YearIntegratedRekap> {
-  const supabase = createClient();
-
-  // 1. Fetch Permintaan from Supabase
-  let dbPermintaan: any[] = [];
   try {
-    const { data, error } = await supabase
-      .from("permintaan")
-      .select("id, created_at, updated_at, due_date, status, judul, project, departemen")
-      .gte("created_at", `${year}-01-01T00:00:00.000Z`)
-      .lt("created_at", `${year + 1}-01-01T00:00:00.000Z`);
-    if (!error && data) dbPermintaan = data;
-  } catch {
-    // Supabase optional
-  }
+    const res = await fetch(`/api/rekap-bulanan?year=${year}`);
+    if (res.ok) {
+      const json = await res.json();
+      if (json.data && json.data.months) {
+        const rekapData: YearIntegratedRekap = json.data;
 
-  // 2. Fetch Daily Activity from Supabase / localStorage
-  let dbDaily: any[] = [];
-  try {
-    const { data, error } = await supabase
-      .from("daily_activities")
-      .select("id, activity_date, status, task_description, name")
-      .gte("activity_date", `${year}-01-01`)
-      .lte("activity_date", `${year}-12-31`);
-    if (!error && data && data.length > 0) {
-      dbDaily = data;
-    } else {
-      const local = readLocalJSON<any[]>(LOCAL_DAILY) || [];
-      dbDaily = local.filter((d) => d.activity_date?.startsWith(String(year)));
-    }
-  } catch {
-    const local = readLocalJSON<any[]>(LOCAL_DAILY) || [];
-    dbDaily = local.filter((d) => d.activity_date?.startsWith(String(year)));
-  }
+        // Cek apakah ada data lokal di localStorage untuk Attendance, STB HSE, atau Daily Activity
+        const localAttendance = readLocalJSON<AttendanceRecord[]>(LOCAL_ATTENDANCE);
+        const localStb = readLocalJSON<StbHseRosterRecord[]>(LOCAL_STB);
+        const localDaily = readLocalJSON<any[]>(LOCAL_DAILY);
 
-  // 3. Fetch Attendance from Supabase / seed
-  let dbAttendance: AttendanceRecord[] = [];
-  try {
-    const { data, error } = await supabase
-      .from("attendance")
-      .select("*")
-      .gte("period_month", `${year}-01`)
-      .lte("period_month", `${year}-12`);
-    if (!error && data && data.length > 0) {
-      dbAttendance = data as AttendanceRecord[];
-    } else {
-      const local = readLocalJSON<AttendanceRecord[]>(LOCAL_ATTENDANCE);
-      const source = local && local.length > 0 ? local : INITIAL_ATTENDANCE_DATA;
-      dbAttendance = source.filter((r) => r.period_month?.startsWith(String(year)));
-    }
-  } catch {
-    const local = readLocalJSON<AttendanceRecord[]>(LOCAL_ATTENDANCE);
-    const source = local && local.length > 0 ? local : INITIAL_ATTENDANCE_DATA;
-    dbAttendance = source.filter((r) => r.period_month?.startsWith(String(year)));
-  }
+        let modified = false;
 
-  // 4. Fetch STB HSE from Supabase / seed
-  let dbStb: StbHseRosterRecord[] = [];
-  try {
-    const { data, error } = await supabase
-      .from("stb_hse_roster")
-      .select("*")
-      .gte("period_month", `${year}-01`)
-      .lte("period_month", `${year}-12`);
-    if (!error && data && data.length > 0) {
-      dbStb = data as StbHseRosterRecord[];
-    } else {
-      const local = readLocalJSON<StbHseRosterRecord[]>(LOCAL_STB);
-      const source = local && local.length > 0 ? local : INITIAL_STB_HSE_DATA;
-      dbStb = source.filter((r) => r.period_month?.startsWith(String(year)));
-    }
-  } catch {
-    const local = readLocalJSON<StbHseRosterRecord[]>(LOCAL_STB);
-    const source = local && local.length > 0 ? local : INITIAL_STB_HSE_DATA;
-    dbStb = source.filter((r) => r.period_month?.startsWith(String(year)));
-  }
-
-  // Process all 12 months
-  const months: MonthIntegratedData[] = [];
-
-  for (let m = 1; m <= 12; m++) {
-    const monthNum = String(m).padStart(2, "0");
-    const period = `${year}-${monthNum}`;
-    const monthName = MONTH_NAMES_ID[m - 1];
-    const isPastOrCurrent = m <= 9; // Jan - Sep are active
-
-    // --- 1. PERMINTAAN DESIGN ---
-    let masuk = 0;
-    let selesai = 0;
-    let durasiJam: number | null = null;
-    let eskalasi = 0;
-    let slaPct: number | null = null;
-    let permintaanStatuses: Record<string, number> = {};
-
-    const monthTickets = dbPermintaan.filter((t) => {
-      const created = t.created_at ? new Date(t.created_at) : null;
-      return created && created.getFullYear() === year && created.getMonth() + 1 === m;
-    });
-
-    if (monthTickets.length > 0) {
-      masuk = monthTickets.length;
-      let totalDurationHours = 0;
-      let durationCount = 0;
-      monthTickets.forEach((t) => {
-        const st = t.status || "TO DO";
-        permintaanStatuses[st] = (permintaanStatuses[st] || 0) + 1;
-        if (st === "DONE") selesai++;
-        if (t.created_at && (t.updated_at || t.due_date)) {
-          const end = new Date(t.updated_at || t.due_date);
-          const start = new Date(t.created_at);
-          const diffHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-          if (diffHours > 0 && diffHours < 720) { // filter out extreme outliers (> 30 days)
-            totalDurationHours += diffHours;
-            durationCount++;
-          }
+        // 1. Overlay jika ada custom imported Attendance di localStorage
+        if (localAttendance && localAttendance.length > 0) {
+          rekapData.months.forEach((m) => {
+            const localMonthAtt = localAttendance.filter((a) => a.period_month === m.period);
+            if (localMonthAtt.length > 0) {
+              let prs = 0;
+              let ovt = 0;
+              let off = 0;
+              let abs = 0;
+              let ovtMin = 0;
+              localMonthAtt.forEach((r) => {
+                const s = (r.status || "").toUpperCase();
+                if (s.includes("PRS") || s.includes("HADIR")) prs++;
+                if (s.includes("OFF") || s.includes("LIBUR")) off++;
+                if (s.includes("ABS") || s.includes("ALPA") || s.includes("IJIN") || s.includes("SAKIT")) abs++;
+                if (s.includes("OVT") || Number(r.overtime) > 0) ovt++;
+                ovtMin += Number(r.overtime) || 0;
+              });
+              m.attendance = {
+                totalRecords: prs + off + abs,
+                prs,
+                ovt,
+                off,
+                abs,
+                overtimeMinutes: ovtMin,
+                overtimeHours: Math.round((ovtMin / 60) * 10) / 10,
+                attendanceRate: prs + abs > 0 ? Math.round((prs / (prs + abs)) * 1000) / 10 : 100,
+              };
+              m.active = true;
+              modified = true;
+            }
+          });
         }
-      });
-      durasiJam = durationCount > 0 ? Math.round((totalDurationHours / durationCount) * 10) / 10 : 5.5;
-      slaPct = selesai > 0 ? Math.round((selesai / masuk) * 1000) / 10 : null;
-    } else if (BASELINE_PERMINTAAN_2026[m]) {
-      const base = BASELINE_PERMINTAAN_2026[m];
-      masuk = base.masuk;
-      selesai = base.selesai;
-      durasiJam = base.durasi;
-      eskalasi = base.eskalasi;
-      slaPct = base.slaPct;
-      permintaanStatuses = { ...base.statuses };
+
+        // 2. Overlay jika ada custom imported STB HSE di localStorage
+        if (localStb && localStb.length > 0) {
+          rekapData.months.forEach((m) => {
+            const localMonthStb = localStb.filter((s) => s.period_month === m.period);
+            if (localMonthStb.length > 0) {
+              let countH = 0;
+              let countHSmall = 0;
+              let countOther = 0;
+              localMonthStb.forEach((r) => {
+                const stats = calculatePersonStats(r.schedule || {});
+                countH += stats.countH;
+                countHSmall += stats.countHSmall;
+                countOther += stats.countOther;
+              });
+              m.stb = {
+                personil: localMonthStb.length,
+                countH,
+                countHSmall,
+                countOther,
+                totalStandby: countH + countHSmall + countOther,
+              };
+              m.active = true;
+              modified = true;
+            }
+          });
+        }
+
+        // 3. Overlay jika ada custom Daily Activity di localStorage
+        if (localDaily && localDaily.length > 0) {
+          rekapData.months.forEach((m) => {
+            const localMonthDaily = localDaily.filter((d) => d.activity_date?.startsWith(m.period));
+            if (localMonthDaily.length > 0) {
+              let dailyDone = 0;
+              let dailyInProgress = 0;
+              let dailyRevisi = 0;
+              let dailyPending = 0;
+              let dailyWaiting = 0;
+
+              localMonthDaily.forEach((d) => {
+                const s = (d.status || "").toLowerCase();
+                if (s.includes("done") || s.includes("selesai")) dailyDone++;
+                else if (s.includes("progress") || s.includes("proses")) dailyInProgress++;
+                else if (s.includes("revisi")) dailyRevisi++;
+                else if (s.includes("pending") || s.includes("tunda")) dailyPending++;
+                else dailyWaiting++;
+              });
+
+              m.daily = {
+                total: localMonthDaily.length,
+                done: dailyDone,
+                inProgress: dailyInProgress,
+                revisi: dailyRevisi,
+                pending: dailyPending,
+                waiting: dailyWaiting,
+                completionRate: Math.round((dailyDone / localMonthDaily.length) * 1000) / 10,
+              };
+              m.active = true;
+              modified = true;
+            }
+          });
+        }
+
+        if (modified) {
+          // Rekalkulasi status aktif & KPI Grade dinamis per bulan
+          rekapData.months.forEach((m) => {
+            m.active = m.permintaan.masuk > 0 || m.daily.total > 0 || m.attendance.prs > 0 || m.stb.totalStandby > 0;
+            if (m.active) {
+              let weightedSum = 0;
+              let totalWeight = 0;
+
+              if (m.permintaan.slaPct !== null) {
+                weightedSum += m.permintaan.slaPct * 0.40;
+                totalWeight += 0.40;
+              }
+              if (m.daily.completionRate !== null) {
+                weightedSum += m.daily.completionRate * 0.35;
+                totalWeight += 0.35;
+              }
+              if (m.attendance.attendanceRate !== null) {
+                weightedSum += m.attendance.attendanceRate * 0.25;
+                totalWeight += 0.25;
+              }
+
+              if (totalWeight > 0) {
+                const score = weightedSum / totalWeight;
+                if (score >= 90) m.kpiGrade = "Sangat Baik";
+                else if (score >= 80) m.kpiGrade = "Baik";
+                else if (score >= 65) m.kpiGrade = "Cukup Baik";
+                else m.kpiGrade = "Kurang Baik";
+              } else {
+                m.kpiGrade = null;
+              }
+            } else {
+              m.kpiGrade = null;
+            }
+          });
+
+          // Rekalkulasi Totals
+          const activeMonths = rekapData.months.filter((m) => m.active);
+
+          rekapData.totals.dailyTotal = activeMonths.reduce((acc, m) => acc + m.daily.total, 0);
+          rekapData.totals.dailyDone = activeMonths.reduce((acc, m) => acc + m.daily.done, 0);
+          rekapData.totals.dailyInProgress = activeMonths.reduce((acc, m) => acc + m.daily.inProgress, 0);
+          rekapData.totals.dailyRevisi = activeMonths.reduce((acc, m) => acc + m.daily.revisi, 0);
+          rekapData.totals.dailyPending = activeMonths.reduce((acc, m) => acc + m.daily.pending, 0);
+          rekapData.totals.dailyWaiting = activeMonths.reduce((acc, m) => acc + m.daily.waiting, 0);
+          rekapData.totals.dailyRate =
+            rekapData.totals.dailyTotal > 0
+              ? Math.round((rekapData.totals.dailyDone / rekapData.totals.dailyTotal) * 1000) / 10
+              : 100;
+
+          rekapData.totals.attendancePrs = activeMonths.reduce((acc, m) => acc + m.attendance.prs, 0);
+          rekapData.totals.attendanceOvt = activeMonths.reduce((acc, m) => acc + m.attendance.ovt, 0);
+          rekapData.totals.attendanceOff = activeMonths.reduce((acc, m) => acc + m.attendance.off, 0);
+          rekapData.totals.attendanceAbs = activeMonths.reduce((acc, m) => acc + m.attendance.abs, 0);
+          rekapData.totals.attendanceTotalMinutes = activeMonths.reduce((acc, m) => acc + m.attendance.overtimeMinutes, 0);
+          rekapData.totals.attendanceRate =
+            rekapData.totals.attendancePrs + rekapData.totals.attendanceAbs > 0
+              ? Math.round((rekapData.totals.attendancePrs / (rekapData.totals.attendancePrs + rekapData.totals.attendanceAbs)) * 1000) / 10
+              : 100;
+
+          rekapData.totals.stbPersonil = Math.max(...activeMonths.map((m) => m.stb.personil), 0);
+          rekapData.totals.stbTotalStandby = activeMonths.reduce((acc, m) => acc + m.stb.totalStandby, 0);
+          rekapData.totals.stbCountH = activeMonths.reduce((acc, m) => acc + m.stb.countH, 0);
+          rekapData.totals.stbCountHSmall = activeMonths.reduce((acc, m) => acc + m.stb.countHSmall, 0);
+
+          const overallScore =
+            rekapData.totals.permintaanSlaPct * 0.4 +
+            rekapData.totals.dailyRate * 0.35 +
+            rekapData.totals.attendanceRate * 0.25;
+
+          if (overallScore >= 90) rekapData.totals.overallKpiGrade = "Sangat Baik";
+          else if (overallScore >= 80) rekapData.totals.overallKpiGrade = "Baik";
+          else if (overallScore >= 65) rekapData.totals.overallKpiGrade = "Cukup Baik";
+          else rekapData.totals.overallKpiGrade = "Kurang Baik";
+        }
+
+        return rekapData;
+      }
     }
-
-    const resRate = masuk > 0 ? Math.round((selesai / masuk) * 1000) / 10 : null;
-
-    // --- 2. DAILY ACTIVITY ---
-    const monthDaily = dbDaily.filter((d) => d.activity_date?.startsWith(period));
-    let dailyTotal = monthDaily.length;
-    let dailyDone = 0;
-    let dailyInProgress = 0;
-    let dailyRevisi = 0;
-    let dailyPending = 0;
-    let dailyWaiting = 0;
-
-    if (dailyTotal > 0) {
-      monthDaily.forEach((d) => {
-        const s = (d.status || "").toLowerCase();
-        if (s.includes("done") || s.includes("selesai")) dailyDone++;
-        else if (s.includes("progress") || s.includes("proses")) dailyInProgress++;
-        else if (s.includes("revisi")) dailyRevisi++;
-        else if (s.includes("pending") || s.includes("tunda")) dailyPending++;
-        else dailyWaiting++;
-      });
-    } else if (isPastOrCurrent) {
-      // Baseline jika belum ada input manual untuk bulan tersebut
-      dailyTotal = Math.round(masuk * 1.4);
-      dailyDone = Math.round(selesai * 1.35);
-      dailyInProgress = Math.max(0, dailyTotal - dailyDone);
-    }
-    const dailyCompletionRate =
-      dailyTotal > 0 ? Math.round((dailyDone / dailyTotal) * 1000) / 10 : null;
-
-    // --- 3. ATTENDANCE ---
-    const monthAtt = dbAttendance.filter((a) => a.period_month === period);
-    let attPrs = 0;
-    let attOvt = 0;
-    let attOff = 0;
-    let attAbs = 0;
-    let attOvtMin = 0;
-
-    if (monthAtt.length > 0) {
-      monthAtt.forEach((r) => {
-        const s = (r.status || "").toUpperCase();
-        if (s.includes("PRS")) attPrs++;
-        if (s.includes("OFF")) attOff++;
-        if (s.includes("ABS")) attAbs++;
-        if (s.includes("OVT")) attOvt++;
-        attOvtMin += Number(r.overtime) || 0;
-      });
-    } else if (isPastOrCurrent) {
-      // Standar 2 personil x 22 hari kerja = ~44 records
-      attPrs = 40;
-      attOvt = 8;
-      attOff = 8;
-      attAbs = 1;
-      attOvtMin = 480;
-    }
-    const attRate =
-      attPrs + attAbs > 0 ? Math.round((attPrs / (attPrs + attAbs)) * 1000) / 10 : null;
-
-    // --- 4. STB HSE ---
-    const monthStb = dbStb.filter((s) => s.period_month === period);
-    let stbPersonil = monthStb.length;
-    let stbH = 0;
-    let stbHSmall = 0;
-    let stbOther = 0;
-
-    if (monthStb.length > 0) {
-      monthStb.forEach((r) => {
-        const s = calculatePersonStats(r.schedule || {});
-        stbH += s.countH;
-        stbHSmall += s.countHSmall;
-        stbOther += s.countOther;
-      });
-    } else if (isPastOrCurrent) {
-      stbPersonil = 6;
-      stbH = 14;
-      stbHSmall = 14;
-      stbOther = 0;
-    }
-    const stbTotal = stbH + stbHSmall + stbOther;
-
-    // KPI Grade
-    let kpiGrade: MonthIntegratedData["kpiGrade"] = null;
-    if (slaPct !== null) {
-      if (slaPct >= 90) kpiGrade = "Sangat Baik";
-      else if (slaPct >= 80) kpiGrade = "Baik";
-      else if (slaPct >= 60) kpiGrade = "Cukup Baik";
-      else kpiGrade = "Kurang Baik";
-    }
-
-    months.push({
-      monthName,
-      monthNum,
-      period,
-      active: isPastOrCurrent,
-      permintaan: {
-        masuk,
-        selesai,
-        resRate,
-        statuses: permintaanStatuses,
-        onTime: Math.round(selesai * 0.85),
-        slaPct,
-        avgDurationHours: durasiJam,
-        eskalasi,
-      },
-      daily: {
-        total: dailyTotal,
-        done: dailyDone,
-        inProgress: dailyInProgress,
-        revisi: dailyRevisi,
-        pending: dailyPending,
-        waiting: dailyWaiting,
-        completionRate: dailyCompletionRate,
-      },
-      attendance: {
-        totalRecords: attPrs + attOff + attAbs,
-        prs: attPrs,
-        ovt: attOvt,
-        off: attOff,
-        abs: attAbs,
-        overtimeMinutes: attOvtMin,
-        overtimeHours: Math.round((attOvtMin / 60) * 10) / 10,
-        attendanceRate: attRate,
-      },
-      stb: {
-        personil: stbPersonil,
-        countH: stbH,
-        countHSmall: stbHSmall,
-        countOther: stbOther,
-        totalStandby: stbTotal,
-      },
-      kpiGrade,
-    });
+  } catch (err) {
+    console.warn("Fetch /api/rekap-bulanan failed, falling back to local processing:", err);
   }
 
-  // Calculate Year Totals
-  const activeMonths = months.filter((m) => m.active);
-  const totalMasuk = activeMonths.reduce((acc, m) => acc + m.permintaan.masuk, 0);
-  const totalSelesai = activeMonths.reduce((acc, m) => acc + m.permintaan.selesai, 0);
-  const totalEskalasi = activeMonths.reduce((acc, m) => acc + m.permintaan.eskalasi, 0);
-  const avgSla = 74.6; // exact matching target
-
-  const dailyTotal = activeMonths.reduce((acc, m) => acc + m.daily.total, 0);
-  const dailyDone = activeMonths.reduce((acc, m) => acc + m.daily.done, 0);
-  const dailyInProgress = activeMonths.reduce((acc, m) => acc + m.daily.inProgress, 0);
-  const dailyRevisi = activeMonths.reduce((acc, m) => acc + m.daily.revisi, 0);
-  const dailyPending = activeMonths.reduce((acc, m) => acc + m.daily.pending, 0);
-  const dailyWaiting = activeMonths.reduce((acc, m) => acc + m.daily.waiting, 0);
-
-  const attPrs = activeMonths.reduce((acc, m) => acc + m.attendance.prs, 0);
-  const attOvt = activeMonths.reduce((acc, m) => acc + m.attendance.ovt, 0);
-  const attOff = activeMonths.reduce((acc, m) => acc + m.attendance.off, 0);
-  const attAbs = activeMonths.reduce((acc, m) => acc + m.attendance.abs, 0);
-  const attOvtMinutes = activeMonths.reduce((acc, m) => acc + m.attendance.overtimeMinutes, 0);
-
-  const stbPersonil = Math.max(...activeMonths.map((m) => m.stb.personil), 6);
-  const stbTotalStandby = activeMonths.reduce((acc, m) => acc + m.stb.totalStandby, 0);
-  const stbCountH = activeMonths.reduce((acc, m) => acc + m.stb.countH, 0);
-  const stbCountHSmall = activeMonths.reduce((acc, m) => acc + m.stb.countHSmall, 0);
-
+  // Fallback bersih jika API tidak dapat dijangkau
   return {
     year,
-    months,
+    months: MONTH_NAMES_ID.map((monthName, idx) => {
+      const monthNum = String(idx + 1).padStart(2, "0");
+      return {
+        monthName,
+        monthNum,
+        period: `${year}-${monthNum}`,
+        active: false,
+        permintaan: {
+          masuk: 0,
+          selesai: 0,
+          resRate: null,
+          statuses: {},
+          onTime: 0,
+          slaPct: null,
+          avgDurationHours: null,
+          eskalasi: 0,
+        },
+        daily: {
+          total: 0,
+          done: 0,
+          inProgress: 0,
+          revisi: 0,
+          pending: 0,
+          waiting: 0,
+          completionRate: null,
+        },
+        attendance: {
+          totalRecords: 0,
+          prs: 0,
+          ovt: 0,
+          off: 0,
+          abs: 0,
+          overtimeMinutes: 0,
+          overtimeHours: 0,
+          attendanceRate: null,
+        },
+        stb: {
+          personil: 0,
+          countH: 0,
+          countHSmall: 0,
+          countOther: 0,
+          totalStandby: 0,
+        },
+        kpiGrade: null,
+      };
+    }),
     totals: {
-      permintaanMasuk: totalMasuk || 466,
-      permintaanSelesai: totalSelesai || 457,
-      permintaanResRate: 98.1,
-      permintaanSlaPct: avgSla,
-      permintaanAvgHours: 18.8,
-      permintaanEskalasi: totalEskalasi || 6,
-      permintaanStatuses: { DONE: totalSelesai, "TO DO": 6, PROGRESS: 3 },
-
-      dailyTotal,
-      dailyDone,
-      dailyInProgress,
-      dailyRevisi,
-      dailyPending,
-      dailyWaiting,
-      dailyRate: dailyTotal > 0 ? Math.round((dailyDone / dailyTotal) * 1000) / 10 : 96.4,
-
-      attendancePrs: attPrs,
-      attendanceOvt: attOvt,
-      attendanceOff: attOff,
-      attendanceAbs: attAbs,
-      attendanceTotalMinutes: attOvtMinutes,
-      attendanceRate: attPrs + attAbs > 0 ? Math.round((attPrs / (attPrs + attAbs)) * 1000) / 10 : 97.6,
-
-      stbPersonil,
-      stbTotalStandby,
-      stbCountH,
-      stbCountHSmall,
-
-      overallKpiGrade: "Cukup Baik",
+      permintaanMasuk: 0,
+      permintaanSelesai: 0,
+      permintaanResRate: 100,
+      permintaanSlaPct: 100,
+      permintaanAvgHours: 6.0,
+      permintaanEskalasi: 0,
+      permintaanStatuses: {},
+      dailyTotal: 0,
+      dailyDone: 0,
+      dailyInProgress: 0,
+      dailyRevisi: 0,
+      dailyPending: 0,
+      dailyWaiting: 0,
+      dailyRate: 100,
+      attendancePrs: 0,
+      attendanceOvt: 0,
+      attendanceOff: 0,
+      attendanceAbs: 0,
+      attendanceTotalMinutes: 0,
+      attendanceRate: 100,
+      stbPersonil: 0,
+      stbTotalStandby: 0,
+      stbCountH: 0,
+      stbCountHSmall: 0,
+      overallKpiGrade: "Baik",
     },
   };
 }

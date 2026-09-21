@@ -884,3 +884,80 @@ export const INITIAL_ATTENDANCE_DATA: AttendanceRecord[] = RAW_INITIAL_DATA.map(
   period_month: extractPeriodMonth(item.date) || "2026-08",
 }));
 
+/**
+ * Buat data presensi baseline untuk 1 periode bulan tertentu (Paulus & Farel)
+ * jika database belum memiliki catatan presensi untuk bulan tersebut.
+ */
+export function getAttendanceSeedForPeriod(period: string): AttendanceRecord[] {
+  if (period === "2026-08") {
+    return INITIAL_ATTENDANCE_DATA;
+  }
+
+  const [yearStr, monthStr] = period.split("-");
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
+  if (!year || !month || month < 1 || month > 12) {
+    return [];
+  }
+
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const records: AttendanceRecord[] = [];
+  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const monthNamesShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  let noCounter = 1;
+  // Urutkan dari hari terakhir ke hari pertama sesuai format standar attendance
+  for (let d = daysInMonth; d >= 1; d--) {
+    const dateObj = new Date(year, month - 1, d);
+    const dayOfWeek = dateObj.getDay();
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    const dateFormatted = `${dayNames[dayOfWeek]}, ${String(d).padStart(2, "0")} ${monthNamesShort[month - 1]} ${year}`;
+
+    // Paulus
+    records.push({
+      id: `att-${period}-p-${d}`,
+      no: noCounter++,
+      period_month: period,
+      employee_no: "GIS19040039",
+      name: "Paulus Petrus Parlindungan Sianipar",
+      date: dateFormatted,
+      shift: isWeekend ? "Shift OFF" : "Shift Daily from 08:00 to 17:00",
+      start_time: isWeekend ? "-" : "07:35",
+      end_time: isWeekend ? "-" : "17:15",
+      status: isWeekend ? "OFF" : "EAI,PRS",
+      overtime: !isWeekend && (d === 15 || d === 28) ? 60 : 0,
+      overtime_index: "0",
+    });
+
+    // Farel
+    records.push({
+      id: `att-${period}-f-${d}`,
+      no: noCounter++,
+      period_month: period,
+      employee_no: "GIS25100212",
+      name: "Muhammad Farel Ramadhan",
+      date: dateFormatted,
+      shift: isWeekend ? "Shift OFF" : "Shift Daily from 08:00 to 17:00",
+      start_time: isWeekend ? "-" : "07:55",
+      end_time: isWeekend ? "-" : "17:10",
+      status: isWeekend ? "OFF" : "EAI,PRS",
+      overtime: !isWeekend && (d === 10 || d === 24) ? 60 : 0,
+      overtime_index: "0",
+    });
+  }
+
+  return records;
+}
+
+/**
+ * Dapatkan seluruh data presensi baseline 12 bulan
+ */
+export function getAllAttendanceSeedData(year: number = 2026): AttendanceRecord[] {
+  const result: AttendanceRecord[] = [];
+  for (let m = 1; m <= 12; m++) {
+    const period = `${year}-${String(m).padStart(2, "0")}`;
+    result.push(...getAttendanceSeedForPeriod(period));
+  }
+  return result;
+}
+

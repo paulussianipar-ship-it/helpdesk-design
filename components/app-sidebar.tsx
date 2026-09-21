@@ -26,7 +26,10 @@ import {
   UserCheck,
   FolderKanban,
   ShieldCheck,
+  BarChart3,
+  Target,
   X,
+  MessageSquareDot,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -70,9 +73,24 @@ const data = {
       icon: FileBox,
     },
     {
+      title: "KPI",
+      url: "/kpi",
+      icon: Target,
+    },
+    {
+      title: "Rekap Bulanan",
+      url: "/rekap-bulanan",
+      icon: BarChart3,
+    },
+    {
       title: "Riwayat Pengerjaan",
       url: "/riwayat-pengerjaan",
       icon: Clock,
+    },
+    {
+      title: "Review & Rating",
+      url: "/feedback",
+      icon: MessageSquareDot,
     },
     {
       title: "Artikel",
@@ -100,6 +118,11 @@ const data = {
       title: "Riwayat",
       url: "/riwayat",
       icon: Clock,
+    },
+    {
+      title: "Review & Rating",
+      url: "/feedback",
+      icon: MessageSquareDot,
     },
     {
       title: "Artikel",

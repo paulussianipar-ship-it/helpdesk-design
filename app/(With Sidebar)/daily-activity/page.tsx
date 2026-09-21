@@ -66,6 +66,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { Content } from "@/components/content";
+
 
 export interface DailyActivity {
   id: string;
@@ -265,6 +267,9 @@ export default function DailyActivityPage() {
 
   // Delete modal state
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+
+  // Detail modal state
+  const [detailActivity, setDetailActivity] = useState<DailyActivity | null>(null);
 
   // Load activities from API (All Roles supported) & fallback to local storage
   const loadActivities = async () => {
@@ -558,13 +563,13 @@ export default function DailyActivityPage() {
         const updatedList = activities.map((act) =>
           act.id === editingActivity.id
             ? {
-                ...act,
-                activity_date: formData.activity_date,
-                name: formData.name.trim(),
-                task_description: formData.task_description.trim(),
-                status: formData.status,
-                remarks: formData.remarks.trim() || null,
-              }
+              ...act,
+              activity_date: formData.activity_date,
+              name: formData.name.trim(),
+              task_description: formData.task_description.trim(),
+              status: formData.status,
+              remarks: formData.remarks.trim() || null,
+            }
             : act
         );
         saveLocalActivities(updatedList);
@@ -748,10 +753,10 @@ export default function DailyActivityPage() {
         const sheet = workbook.Sheets[sheetName];
         const rows = sheet
           ? XLSX.utils.sheet_to_json<unknown[]>(sheet, {
-              header: 1,
-              defval: "",
-              raw: true,
-            })
+            header: 1,
+            defval: "",
+            raw: true,
+          })
           : [];
         const rowIndex = rows.findIndex((row) => {
           const headers = row.map(normalizeHeader);
@@ -791,6 +796,20 @@ export default function DailyActivityPage() {
       const parsedRows: ParsedImportRow[] = [];
 
       matrix.slice(headerIndex + 1).forEach((row) => {
+        // Check if this row is a section date delimiter (e.g. "JOB LIST TODAY;1;;;2026-08-03 00:00:00")
+        const rowStrings = row.map((cell) => String(cell ?? "").trim());
+        const dateInRowMatch = rowStrings.find((str) => /^\d{4}-\d{2}-\d{2}/.test(str));
+        const hasJobMarker = rowStrings.some((str) => str.toLowerCase().includes("job list"));
+        const taskDesc = taskIndex >= 0 ? String(row[taskIndex] ?? "").trim() : "";
+
+        if ((hasJobMarker || !taskDesc) && dateInRowMatch) {
+          const matched = dateInRowMatch.match(/^\d{4}-\d{2}-\d{2}/);
+          if (matched) {
+            previousActivityDate = matched[0];
+            return;
+          }
+        }
+
         const rawDate = dateIndex >= 0 ? row[dateIndex] : null;
         const parsedDate = normalizeActivityDate(rawDate);
         const finalActivityDate = parsedDate || previousActivityDate || getTodayDate();
@@ -800,7 +819,6 @@ export default function DailyActivityPage() {
             ? String(row[nameIndex] ?? "").trim()
             : previousName;
 
-        const taskDesc = taskIndex >= 0 ? String(row[taskIndex] ?? "").trim() : "";
         const rawStatus = statusIndex >= 0 ? String(row[statusIndex] ?? "").trim() : "";
         const activityStatus = normalizeActivityStatus(rawStatus);
         const activityRemarks =
@@ -935,8 +953,64 @@ export default function DailyActivityPage() {
   };
 
   return (
-    <div className="col-span-12 flex flex-col gap-5">
-      {/* Hidden file input for Excel upload */}
+    <Content
+      title="Daily Activity"
+      description={`Menampilkan catatan aktivitas pekerjaan harian tim per bulan (${selectedMonth === "all" ? "Semua Periode" : formatPeriodMonth(selectedMonth)}).`}
+      size="lg"
+      cardAction={
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Import Excel */}
+          <Button
+            variant="default"
+            size="sm"
+            disabled={importing}
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+          >
+            {importing ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <FileUp className="size-4" />
+            )}
+            <span>Import Excel</span>
+          </Button>
+
+          {/* Export Excel */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportExcel}
+            className="flex items-center gap-1.5"
+          >
+            <Download className="h-4 w-4 text-emerald-600" />
+            <span>Export Excel</span>
+          </Button>
+
+          {/* Template */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleDownloadTemplate}
+            title="Download Template Format Excel"
+            className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
+          >
+            <FileSpreadsheet className="size-4" />
+            <span className="hidden md:inline">Template</span>
+          </Button>
+
+          {/* Tambah Manual */}
+          <Button
+            size="sm"
+            onClick={handleOpenAddForm}
+            className="flex items-center gap-1.5"
+          >
+            <Plus className="size-4" />
+            <span>Tambah</span>
+          </Button>
+        </div>
+      }
+    >
+      {/* Hidden file input */}
       <input
         type="file"
         ref={fileInputRef}
@@ -945,101 +1019,24 @@ export default function DailyActivityPage() {
         className="hidden"
       />
 
-      {/* Header Halaman - Aligned with Attendance List Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-card border rounded-xl p-5 shadow-xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight">Daily Activity</h1>
-            <Badge variant="secondary" className="font-mono text-xs">
-              {monthActivities.length} Records
-            </Badge>
-          </div>
-          <p className="text-sm text-muted-foreground mt-1">
-            Catat dan kelola riwayat aktivitas pekerjaan harian tim dengan rekap bulanan terstruktur.
-          </p>
-        </div>
-
+      {/* 1. MONTH SELECTOR */}
+      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-card border rounded-xl p-3.5 shadow-xs mb-4">
         <div className="flex flex-wrap items-center gap-2">
-          {/* Tombol Import Excel Per Bulan */}
-          <Button
-            variant="default"
-            size="sm"
-            disabled={importing}
-            onClick={() => fileInputRef.current?.click()}
-            className="gap-1.5 shadow-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
-          >
-            {importing ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <FileUp className="size-4" />
-            )}
-            <span>Import Excel Bulanan</span>
-          </Button>
-
-          {/* Tombol Export Excel */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportExcel}
-            className="gap-1.5 shadow-xs"
-          >
-            <Download className="size-4" />
-            <span>Ekspor Excel</span>
-          </Button>
-
-          {/* Tombol Template Format Excel */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleDownloadTemplate}
-            title="Download Template Format Excel"
-            className="gap-1 text-muted-foreground hover:text-foreground"
-          >
-            <FileSpreadsheet className="size-4" />
-            <span className="hidden md:inline">Template</span>
-          </Button>
-
-          {/* Tombol Tambah Manual */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleOpenAddForm}
-            className="gap-1.5 shadow-xs border-primary/40 text-primary hover:bg-primary/5"
-          >
-            <Plus className="size-4" />
-            <span>Tambah</span>
-          </Button>
-
-          {/* Refresh Data */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={loadActivities}
-            title="Muat Ulang Data"
-            className="size-8"
-          >
-            <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
-          </Button>
-        </div>
-      </div>
-
-      {/* Navigasi Pemilih Bulan (Monthly Switcher) - Aligned with Attendance */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-card border rounded-xl p-4 shadow-xs">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center rounded-lg border bg-muted/30 p-1">
+          {/* Prev / Label / Next */}
+          <div className="flex items-center rounded-lg border bg-muted/40 p-1">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => handleShiftMonth(-1)}
               disabled={selectedMonth === "all"}
               title="Bulan Sebelumnya"
-              className="size-8 rounded-md hover:bg-background"
+              className="h-8 w-8 rounded-md hover:bg-background"
             >
-              <ChevronLeft className="size-4" />
+              <ChevronLeft className="h-4 w-4" />
             </Button>
 
-            <div className="px-3 py-1 flex items-center gap-2">
-              <CalendarDays className="size-4 text-primary" />
+            <div className="px-3 py-1 flex items-center gap-2 min-w-[150px] justify-center">
+              <CalendarDays className="h-4 w-4 text-primary" />
               <span className="font-semibold text-sm">
                 {selectedMonth === "all" ? "Semua Bulan" : formatPeriodMonth(selectedMonth)}
               </span>
@@ -1051,14 +1048,14 @@ export default function DailyActivityPage() {
               onClick={() => handleShiftMonth(1)}
               disabled={selectedMonth === "all"}
               title="Bulan Berikutnya"
-              className="size-8 rounded-md hover:bg-background"
+              className="h-8 w-8 rounded-md hover:bg-background"
             >
-              <ChevronRight className="size-4" />
+              <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
 
-          {/* Dropdown Pemilih Periode Bulan */}
-          <div className="w-full sm:w-[190px]">
+          {/* Dropdown Bulan */}
+          <div className="w-full sm:w-[210px]">
             <Select
               value={selectedMonth}
               onValueChange={(val) => {
@@ -1067,9 +1064,9 @@ export default function DailyActivityPage() {
               }}
             >
               <SelectTrigger className="h-9 text-xs">
-                <SelectValue placeholder="Pilih Periode" />
+                <SelectValue placeholder="Pilih Bulan" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-[300px]">
                 <SelectItem value="all">Semua Periode ({activities.length})</SelectItem>
                 {availableMonths.map((m) => (
                   <SelectItem key={m.period} value={m.period}>
@@ -1080,9 +1077,9 @@ export default function DailyActivityPage() {
             </Select>
           </div>
 
-          {/* Input Month Picker Langsung */}
+          {/* Native Month Picker */}
           <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground border rounded-lg px-2.5 h-9 bg-background">
-            <Calendar className="size-3.5" />
+            <Calendar className="h-3.5 w-3.5 text-primary" />
             <input
               type="month"
               value={selectedMonth === "all" ? "" : selectedMonth}
@@ -1093,184 +1090,391 @@ export default function DailyActivityPage() {
                 }
               }}
               className="bg-transparent text-xs text-foreground outline-none cursor-pointer"
+              title="Pilih Bulan & Tahun Bebas"
             />
           </div>
         </div>
 
-        {/* Info Ringkas Periode Aktif */}
+        {/* Info Periode */}
         <div className="flex items-center gap-2 self-start md:self-auto text-xs text-muted-foreground">
-          <span>Menampilkan aktivitas:</span>
+          <span>Tabel Periode:</span>
           <Badge variant="outline" className="font-semibold text-primary border-primary/30">
             {selectedMonth === "all" ? "Semua Periode" : formatPeriodMonth(selectedMonth)}
           </Badge>
-          <span className="font-mono">({monthActivities.length} baris)</span>
+          <span className="font-mono">({monthActivities.length} aktivitas)</span>
         </div>
       </div>
 
-      {/* KPI Cards Ringkasan 6 Metrik - Aligned with Attendance Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {/* Total Data */}
-        <div className="p-3.5 bg-card border rounded-xl shadow-2xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium">Aktivitas Bulan Ini</span>
-            <Layers className="size-4 text-primary" />
+      {/* 2. STAT CARDS — clickable filter buttons (matching Permintaan Desain style) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 mb-5">
+        {/* Total */}
+        <button
+          type="button"
+          onClick={() => { setStatusFilter("all"); setCurrentPage(1); }}
+          className={`p-3 rounded-xl border text-left transition-all ${statusFilter === "all"
+            ? "bg-primary/10 border-primary/40 ring-1 ring-primary/30"
+            : "bg-card hover:bg-muted/40"
+            }`}
+        >
+          <div className="text-[11px] font-medium text-muted-foreground flex items-center justify-between">
+            <span>Total Aktivitas</span>
+            <Layers className="h-3.5 w-3.5 text-primary" />
           </div>
-          <div className="mt-2">
-            <span className="text-2xl font-bold tracking-tight">{stats.total}</span>
-            <span className="text-[11px] text-muted-foreground ml-1.5">tugas</span>
-          </div>
-        </div>
+          <div className="text-xl font-bold mt-1 text-foreground">{stats.total}</div>
+        </button>
 
-        {/* Selesai (Done) */}
-        <div className="p-3.5 bg-card border rounded-xl shadow-2xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400">
-            <span className="text-xs font-medium">Selesai (Done)</span>
-            <CheckCircle2 className="size-4" />
+        {/* Done */}
+        <button
+          type="button"
+          onClick={() => { setStatusFilter("done"); setCurrentPage(1); }}
+          className={`p-3 rounded-xl border text-left transition-all ${statusFilter === "done"
+            ? "bg-emerald-500/15 border-emerald-500/40 ring-1 ring-emerald-500/30"
+            : "bg-card hover:bg-muted/40"
+            }`}
+        >
+          <div className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400 flex items-center justify-between">
+            <span>Selesai (Done)</span>
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
           </div>
-          <div className="mt-2">
-            <span className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
-              {stats.doneCount}
-            </span>
-            <span className="text-[11px] text-muted-foreground ml-1.5">tugas</span>
-          </div>
-        </div>
+          <div className="text-xl font-bold mt-1 text-emerald-700 dark:text-emerald-400">{stats.doneCount}</div>
+        </button>
 
         {/* In Progress */}
-        <div className="p-3.5 bg-card border rounded-xl shadow-2xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-blue-600 dark:text-blue-400">
-            <span className="text-xs font-medium">Dalam Proses</span>
-            <Zap className="size-4" />
+        <button
+          type="button"
+          onClick={() => { setStatusFilter("progress"); setCurrentPage(1); }}
+          className={`p-3 rounded-xl border text-left transition-all ${statusFilter === "progress"
+            ? "bg-blue-500/15 border-blue-500/40 ring-1 ring-blue-500/30"
+            : "bg-card hover:bg-muted/40"
+            }`}
+        >
+          <div className="text-[11px] font-medium text-blue-700 dark:text-blue-400 flex items-center justify-between">
+            <span>Dalam Proses</span>
+            <Zap className="h-3.5 w-3.5 text-blue-600" />
           </div>
-          <div className="mt-2">
-            <span className="text-2xl font-bold tracking-tight text-blue-600 dark:text-blue-400">
-              {stats.inProgressCount}
-            </span>
-            <span className="text-[11px] text-muted-foreground ml-1.5">tugas</span>
-          </div>
-        </div>
+          <div className="text-xl font-bold mt-1 text-blue-700 dark:text-blue-400">{stats.inProgressCount}</div>
+        </button>
 
         {/* Revisi */}
-        <div className="p-3.5 bg-card border rounded-xl shadow-2xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-amber-600 dark:text-amber-400">
-            <span className="text-xs font-medium">Revisi Pengerjaan</span>
-            <RotateCcw className="size-4" />
+        <button
+          type="button"
+          onClick={() => { setStatusFilter("revisi"); setCurrentPage(1); }}
+          className={`p-3 rounded-xl border text-left transition-all ${statusFilter === "revisi"
+            ? "bg-amber-500/15 border-amber-500/40 ring-1 ring-amber-500/30"
+            : "bg-card hover:bg-muted/40"
+            }`}
+        >
+          <div className="text-[11px] font-medium text-amber-700 dark:text-amber-400 flex items-center justify-between">
+            <span>Revisi</span>
+            <RotateCcw className="h-3.5 w-3.5 text-amber-600" />
           </div>
-          <div className="mt-2">
-            <span className="text-2xl font-bold tracking-tight text-amber-600 dark:text-amber-400">
-              {stats.revisionCount}
-            </span>
-            <span className="text-[11px] text-muted-foreground ml-1.5">tugas</span>
-          </div>
-        </div>
+          <div className="text-xl font-bold mt-1 text-amber-700 dark:text-amber-400">{stats.revisionCount}</div>
+        </button>
 
         {/* Pending */}
-        <div className="p-3.5 bg-card border rounded-xl shadow-2xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-rose-600 dark:text-rose-400">
-            <span className="text-xs font-medium">Tertunda (Pending)</span>
-            <PauseCircle className="size-4" />
+        <button
+          type="button"
+          onClick={() => { setStatusFilter("pending"); setCurrentPage(1); }}
+          className={`p-3 rounded-xl border text-left transition-all ${statusFilter === "pending"
+            ? "bg-rose-500/15 border-rose-500/40 ring-1 ring-rose-500/30"
+            : "bg-card hover:bg-muted/40"
+            }`}
+        >
+          <div className="text-[11px] font-medium text-rose-700 dark:text-rose-400 flex items-center justify-between">
+            <span>Tertunda (Pending)</span>
+            <PauseCircle className="h-3.5 w-3.5 text-rose-600" />
           </div>
-          <div className="mt-2">
-            <span className="text-2xl font-bold tracking-tight text-rose-600 dark:text-rose-400">
-              {stats.pendingCount}
-            </span>
-            <span className="text-[11px] text-muted-foreground ml-1.5">tugas</span>
-          </div>
-        </div>
+          <div className="text-xl font-bold mt-1 text-rose-700 dark:text-rose-400">{stats.pendingCount}</div>
+        </button>
 
         {/* Waiting */}
-        <div className="p-3.5 bg-card border rounded-xl shadow-2xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs font-medium">Menunggu Antrian</span>
-            <Hourglass className="size-4 text-slate-500" />
+        <button
+          type="button"
+          onClick={() => { setStatusFilter("waiting"); setCurrentPage(1); }}
+          className={`p-3 rounded-xl border text-left transition-all ${statusFilter === "waiting"
+            ? "bg-slate-500/15 border-slate-500/40 ring-1 ring-slate-500/30"
+            : "bg-card hover:bg-muted/40"
+            }`}
+        >
+          <div className="text-[11px] font-medium text-slate-600 dark:text-slate-400 flex items-center justify-between">
+            <span>Menunggu</span>
+            <Hourglass className="h-3.5 w-3.5 text-slate-500" />
           </div>
-          <div className="mt-2">
-            <span className="text-2xl font-bold tracking-tight text-slate-600 dark:text-slate-400">
-              {stats.waitingCount}
-            </span>
-            <span className="text-[11px] text-muted-foreground ml-1.5">tugas</span>
-          </div>
-        </div>
+          <div className="text-xl font-bold mt-1 text-slate-600 dark:text-slate-400">{stats.waitingCount}</div>
+        </button>
       </div>
 
-      {/* Filter & Bar Pencarian - Aligned with Attendance */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-card border rounded-xl p-4 shadow-xs">
-        <div className="flex flex-1 flex-wrap items-center gap-3">
-          {/* Pencarian */}
-          <div className="relative flex-1 min-w-[240px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+      {/* 3. FILTER AREA */}
+      <div className="flex flex-col gap-3 mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Cari aktivitas, pelaksana, task description, status..."
+              placeholder="Cari aktivitas, nama, task description..."
+              className="pl-9"
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
-              className="pl-9 h-9 text-sm"
             />
           </div>
 
           {/* Filter Status */}
-          <div className="w-[170px]">
-            <Select
-              value={statusFilter}
-              onValueChange={(val) => {
-                setStatusFilter(val);
-                setCurrentPage(1);
-              }}
-            >
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue placeholder="Semua Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Semua Status</SelectItem>
-                <SelectItem value="done">✅ Done (Selesai)</SelectItem>
-                <SelectItem value="progress">⚡ In Progress (Proses)</SelectItem>
-                <SelectItem value="revisi">🔄 Revisi</SelectItem>
-                <SelectItem value="pending">⏸️ Pending</SelectItem>
-                <SelectItem value="waiting">⏳ Waiting</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <Select
+            value={statusFilter}
+            onValueChange={(val) => {
+              setStatusFilter(val);
+              setCurrentPage(1);
+            }}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Semua Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua Status</SelectItem>
+              <SelectItem value="done">✅ Done (Selesai)</SelectItem>
+              <SelectItem value="progress">⚡ In Progress (Proses)</SelectItem>
+              <SelectItem value="revisi">🔄 Revisi</SelectItem>
+              <SelectItem value="pending">⏸️ Pending</SelectItem>
+              <SelectItem value="waiting">⏳ Waiting</SelectItem>
+            </SelectContent>
+          </Select>
 
-          {/* Filter Staff / Pelaksana */}
-          <div className="w-[200px]">
-            <Select
-              value={staffFilter}
-              onValueChange={(val) => {
-                setStaffFilter(val);
-                setCurrentPage(1);
-              }}
-            >
-              <SelectTrigger className="h-9 text-sm truncate">
-                <SelectValue placeholder="Semua Pelaksana" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Semua Pelaksana</SelectItem>
-                {uniqueStaff.map((staff) => (
-                  <SelectItem key={staff.name} value={staff.name}>
-                    {staff.name} ({staff.count})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Filter Pelaksana */}
+          <Select
+            value={staffFilter}
+            onValueChange={(val) => {
+              setStaffFilter(val);
+              setCurrentPage(1);
+            }}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Semua Pelaksana" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua Pelaksana</SelectItem>
+              {uniqueStaff.map((staff) => (
+                <SelectItem key={staff.name} value={staff.name}>
+                  {staff.name} ({staff.count})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-          {/* Tombol Reset Filter */}
-          {(searchTerm || statusFilter !== "all" || staffFilter !== "all") && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={resetFilters}
-              className="h-9 text-xs text-muted-foreground hover:text-foreground"
-            >
-              Reset Filter
-            </Button>
-          )}
+          {/* Reset Filter */}
+          <div className="flex gap-2">
+            {(searchTerm || statusFilter !== "all" || staffFilter !== "all") && (
+              <Button
+                size="icon"
+                variant="outline"
+                className="shrink-0"
+                title="Reset Semua Filter"
+                onClick={resetFilters}
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 4. TABLE AREA */}
+      <div className="border rounded-xl overflow-hidden bg-card shadow-2xs">
+        {/* Table Header Bar */}
+        <div className="bg-muted/40 px-4 py-2.5 border-b flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-4 w-4 text-primary" />
+            <span className="font-semibold text-sm text-foreground">
+              Daftar Aktivitas: {selectedMonth === "all" ? "Semua Periode" : formatPeriodMonth(selectedMonth)}
+            </span>
+          </div>
+          <span className="text-xs text-muted-foreground font-medium">
+            Total {filteredActivities.length} aktivitas ditemukan
+          </span>
         </div>
 
-        {/* Kontrol Rows Per Page */}
-        <div className="flex items-center gap-2 self-end md:self-auto text-xs text-muted-foreground">
-          <span>Baris:</span>
+        <Table className="min-w-[900px]">
+          <TableHeader>
+            <TableRow className="bg-muted/20">
+              <TableHead className="w-[50px] font-semibold">No</TableHead>
+              <TableHead className="font-semibold w-[140px]">Tanggal Pengajuan</TableHead>
+              <TableHead className="font-semibold">Judul Permintaan</TableHead>
+              <TableHead className="font-semibold min-w-[180px]">Peminta / Divisi</TableHead>
+              <TableHead className="font-semibold min-w-[160px]">Desainer</TableHead>
+              <TableHead className="font-semibold">Status</TableHead>
+              <TableHead className="font-semibold w-[140px]">Target Selesai</TableHead>
+              <TableHead className="text-right font-semibold">Aksi</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center h-32">
+                  <div className="flex justify-center items-center gap-2 text-muted-foreground">
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    <span>Memuat data daily activity {formatPeriodMonth(selectedMonth)}...</span>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : paginatedActivities.length > 0 ? (
+              paginatedActivities.map((activity, index) => {
+                const displayIndex = (currentPage - 1) * pageSize + index + 1;
+                const isPaulus = activity.name.toLowerCase().includes("paulus");
+                const isFarel = activity.name.toLowerCase().includes("farel");
+                return (
+                  <TableRow key={activity.id || index} className="hover:bg-muted/30 transition-colors">
+                    {/* No */}
+                    <TableCell className="text-muted-foreground text-xs font-mono">
+                      {displayIndex}
+                    </TableCell>
+
+                    {/* Tanggal Pengajuan = activity_date */}
+                    <TableCell className="whitespace-nowrap">
+                      {activity.activity_date ? (
+                        <div className="flex flex-col">
+                          <span className="text-xs font-medium text-foreground">
+                            {new Date(activity.activity_date).toLocaleDateString("id-ID", {
+                              day: "numeric", month: "short", year: "numeric",
+                            })}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground">
+                            {formatDateDisplay(activity.activity_date)}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+
+                    {/* Judul Permintaan = task_description */}
+                    <TableCell className="max-w-[280px]">
+                      <div className="font-semibold text-sm text-foreground line-clamp-2" title={activity.task_description}>
+                        {activity.task_description}
+                      </div>
+                      {activity.request_id && (
+                        <div className="mt-1">
+                          <Badge variant="outline" className="text-[11px] px-1.5 py-0 font-normal">
+                            Permintaan Desain
+                          </Badge>
+                        </div>
+                      )}
+                    </TableCell>
+
+                    {/* Peminta / Divisi = name + divisi IT/Creative */}
+                    <TableCell>
+                      <div className="font-medium text-sm text-foreground">
+                        {activity.name}
+                      </div>
+                      <div className="text-xs text-muted-foreground">IT / Creative</div>
+                    </TableCell>
+
+                    {/* Desainer = name dengan dot warna */}
+                    <TableCell>
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`inline-block size-2 rounded-full shrink-0 ${isPaulus ? "bg-sky-500" : isFarel ? "bg-indigo-500" : "bg-emerald-500"
+                            }`}
+                        />
+                        <span className="font-medium text-sm text-foreground">
+                          {activity.name}
+                        </span>
+                      </div>
+                    </TableCell>
+
+                    {/* Status */}
+                    <TableCell>{renderStatusBadge(activity.status)}</TableCell>
+
+                    {/* Target Selesai = remarks (catatan / target) */}
+                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                      {activity.remarks ? (
+                        <div className="flex items-center gap-1 text-xs">
+                          <span className="line-clamp-1">{activity.remarks}</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+
+                    {/* Aksi */}
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1.5">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs px-2.5"
+                          onClick={() => setDetailActivity(activity)}
+                          title="Lihat Detail"
+                        >
+                          Detail
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs px-2"
+                          onClick={() => handleOpenEditForm(activity)}
+                          title="Edit Aktivitas"
+                        >
+                          <Pencil className="size-3.5" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => setDeleteTargetId(activity.id)}
+                          title="Hapus Aktivitas"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            ) : (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <CalendarCheck2 className="h-8 w-8 text-muted-foreground/50" />
+                    <p className="font-medium text-foreground">
+                      Tidak ada aktivitas pada {selectedMonth === "all" ? "semua periode" : formatPeriodMonth(selectedMonth)}
+                    </p>
+                    <p className="text-xs text-muted-foreground max-w-sm">
+                      Tidak ada aktivitas yang cocok dengan filter yang dipilih. Anda dapat berpindah ke bulan lain atau mereset filter.
+                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+                      >
+                        <FileUp className="size-3.5" />
+                        <span>Import Excel</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleOpenAddForm}
+                        className="text-xs gap-1.5"
+                      >
+                        <Plus className="size-3.5" />
+                        <span>Tambah Manual</span>
+                      </Button>
+                    </div>
+                  </div>
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* 5. PAGINATION (below card — matching Permintaan Desain) */}
+      <div className="mt-4 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          <span>Tampilkan</span>
           <Select
             value={String(pageSize)}
             onValueChange={(v) => {
@@ -1278,193 +1482,25 @@ export default function DailyActivityPage() {
               setCurrentPage(1);
             }}
           >
-            <SelectTrigger className="h-8 w-[70px] text-xs">
+            <SelectTrigger className="w-[70px] h-8">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="10">10</SelectItem>
-              <SelectItem value="15">15</SelectItem>
               <SelectItem value="25">25</SelectItem>
               <SelectItem value="50">50</SelectItem>
               <SelectItem value="100">100</SelectItem>
             </SelectContent>
           </Select>
-        </div>
-      </div>
-
-      {/* Tabel Data Daily Activity - Aligned with Attendance Table */}
-      <div className="border rounded-xl bg-card shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader className="bg-muted/50 text-xs">
-              <TableRow>
-                <TableHead className="w-[50px] text-center font-bold">No.</TableHead>
-                <TableHead className="min-w-[130px] font-bold">Tanggal</TableHead>
-                <TableHead className="min-w-[200px] font-bold">Name</TableHead>
-                <TableHead className="min-w-[320px] font-bold">Task Description</TableHead>
-                <TableHead className="min-w-[160px] font-bold">Status</TableHead>
-                <TableHead className="min-w-[200px] font-bold">Remarks</TableHead>
-                <TableHead className="w-[80px] text-center font-bold">Aksi</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody className="text-xs">
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="h-36 text-center text-muted-foreground">
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <Loader2 className="size-6 animate-spin text-primary" />
-                      <span>Memuat data daily activity...</span>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : paginatedActivities.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="h-36 text-center text-muted-foreground">
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <CalendarCheck2 className="size-8 text-muted-foreground/50" />
-                      <p className="font-medium">
-                        Belum ada data daily activity untuk periode{" "}
-                        <span className="text-foreground font-semibold">
-                          {selectedMonth === "all" ? "Semua" : formatPeriodMonth(selectedMonth)}
-                        </span>
-                        .
-                      </p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={() => fileInputRef.current?.click()}
-                          className="text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
-                        >
-                          <FileUp className="size-3.5" />
-                          <span>Import Excel Bulan Ini</span>
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleOpenAddForm}
-                          className="text-xs gap-1.5"
-                        >
-                          <Plus className="size-3.5" />
-                          <span>Tambah Aktivitas Manual</span>
-                        </Button>
-                      </div>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                paginatedActivities.map((activity, index) => {
-                  const displayIndex = (currentPage - 1) * pageSize + index + 1;
-                  const isPaulus = activity.name.toLowerCase().includes("paulus");
-                  const isFarel = activity.name.toLowerCase().includes("farel");
-
-                  return (
-                    <TableRow
-                      key={activity.id || index}
-                      className="hover:bg-muted/40 transition-colors border-b"
-                    >
-                      {/* 1. No. */}
-                      <TableCell className="text-center font-mono text-muted-foreground">
-                        {displayIndex}.
-                      </TableCell>
-
-                      {/* 2. Tanggal */}
-                      <TableCell className="font-mono text-muted-foreground whitespace-nowrap">
-                        {formatDateDisplay(activity.activity_date)}
-                      </TableCell>
-
-                      {/* 3. Name */}
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className={`inline-block size-2 rounded-full ${
-                              isPaulus
-                                ? "bg-sky-500"
-                                : isFarel
-                                ? "bg-indigo-500"
-                                : "bg-emerald-500"
-                            }`}
-                          />
-                          <span className="font-semibold text-foreground">
-                            {activity.name}
-                          </span>
-                        </div>
-                      </TableCell>
-
-                      {/* 4. Task Description */}
-                      <TableCell className="whitespace-pre-wrap leading-relaxed py-3">
-                        <div className="space-y-1">
-                          <p className="text-foreground font-medium">{activity.task_description}</p>
-                          {activity.request_id && (
-                            <span className="inline-block rounded-md bg-primary/10 text-primary px-2 py-0.5 text-[10px] font-semibold">
-                              Permintaan Desain
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-
-                      {/* 5. Status */}
-                      <TableCell>{renderStatusBadge(activity.status)}</TableCell>
-
-                      {/* 6. Remarks */}
-                      <TableCell className="whitespace-pre-wrap text-muted-foreground leading-relaxed">
-                        {activity.remarks || "-"}
-                      </TableCell>
-
-                      {/* 7. Aksi */}
-                      <TableCell className="text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleOpenEditForm(activity)}
-                            title="Edit Aktivitas"
-                            className="size-7 text-muted-foreground hover:text-foreground"
-                          >
-                            <Pencil className="size-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeleteTargetId(activity.id)}
-                            title="Hapus Aktivitas"
-                            className="size-7 text-muted-foreground hover:text-rose-600"
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
+          <span>
+            aktivitas per halaman (Total {filteredActivities.length} aktivitas
+            {filteredActivities.length !== monthActivities.length &&
+              ` difilter dari ${monthActivities.length} bulan ini`}
+            )
+          </span>
         </div>
 
-        {/* Pagination Footer - Aligned with Attendance */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 border-t bg-muted/20 text-xs text-muted-foreground">
-          <div>
-            Menampilkan{" "}
-            <span className="font-semibold text-foreground">
-              {filteredActivities.length === 0
-                ? 0
-                : (currentPage - 1) * pageSize + 1}
-            </span>{" "}
-            -{" "}
-            <span className="font-semibold text-foreground">
-              {Math.min(currentPage * pageSize, filteredActivities.length)}
-            </span>{" "}
-            dari{" "}
-            <span className="font-semibold text-foreground">
-              {filteredActivities.length}
-            </span>{" "}
-            aktivitas
-            {filteredActivities.length !== monthActivities.length && (
-              <span> (difilter dari total {monthActivities.length} bulan ini)</span>
-            )}
-          </div>
-
+        {totalPages > 1 && (
           <div className="flex items-center gap-1.5">
             <Button
               variant="outline"
@@ -1475,7 +1511,7 @@ export default function DailyActivityPage() {
             >
               Sebelumnya
             </Button>
-            <div className="px-2 font-medium text-foreground">
+            <div className="px-2 font-medium text-sm text-foreground">
               Halaman {currentPage} dari {totalPages}
             </div>
             <Button
@@ -1488,11 +1524,104 @@ export default function DailyActivityPage() {
               Berikutnya
             </Button>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* MODAL: Import Excel Per Bulan - Aligned with Attendance Import Modal */}
+      {/* MODAL: View Detail Aktivitas */}
+      <Dialog open={!!detailActivity} onOpenChange={(open) => { if (!open) setDetailActivity(null); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <CalendarDays className="size-4 text-primary" />
+              Detail Daily Activity
+            </DialogTitle>
+            <DialogDescription>
+              Informasi lengkap catatan aktivitas pekerjaan harian.
+            </DialogDescription>
+          </DialogHeader>
+
+          {detailActivity && (
+            <div className="space-y-4 text-sm">
+              {/* Header info card */}
+              <div className="bg-muted/40 rounded-xl border p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`inline-block size-2.5 rounded-full ${detailActivity.name.toLowerCase().includes("paulus")
+                        ? "bg-sky-500"
+                        : detailActivity.name.toLowerCase().includes("farel")
+                          ? "bg-indigo-500"
+                          : "bg-emerald-500"
+                        }`}
+                    />
+                    <span className="font-semibold text-foreground">{detailActivity.name}</span>
+                    <Badge variant="outline" className="text-[11px] font-normal">IT / Creative</Badge>
+                  </div>
+                  <div>{renderStatusBadge(detailActivity.status)}</div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                  <div>
+                    <span className="text-muted-foreground block">Tanggal Pengajuan</span>
+                    <span className="font-medium text-foreground">
+                      {new Date(detailActivity.activity_date).toLocaleDateString("id-ID", {
+                        weekday: "long", day: "numeric", month: "long", year: "numeric",
+                      })}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block">Desainer</span>
+                    <span className="font-medium text-foreground">{detailActivity.name}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Judul Permintaan / Task Description */}
+              <div>
+                <Label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Judul Permintaan</Label>
+                <div className="mt-1.5 bg-background border rounded-lg px-3 py-2.5 text-sm font-medium text-foreground leading-relaxed">
+                  {detailActivity.task_description}
+                </div>
+                {detailActivity.request_id && (
+                  <div className="mt-1.5">
+                    <Badge variant="outline" className="text-[11px] font-normal">Permintaan Desain</Badge>
+                  </div>
+                )}
+              </div>
+
+              {/* Target Selesai / Remarks */}
+              <div>
+                <Label className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Target Selesai / Remarks</Label>
+                <div className="mt-1.5 bg-background border rounded-lg px-3 py-2.5 text-sm text-muted-foreground leading-relaxed min-h-[52px]">
+                  {detailActivity.remarks || <span className="italic text-muted-foreground/60">Tidak ada catatan tambahan</span>}
+                </div>
+              </div>
+
+              {/* Created at */}
+              {detailActivity.created_at && (
+                <p className="text-[11px] text-muted-foreground text-right">
+                  Dicatat: {new Date(detailActivity.created_at).toLocaleString("id-ID")}
+                </p>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 mt-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { if (detailActivity) { handleOpenEditForm(detailActivity); setDetailActivity(null); } }}
+            >
+              <Pencil className="size-3.5 mr-1.5" /> Edit
+            </Button>
+            <Button size="sm" onClick={() => setDetailActivity(null)}>Tutup</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL: Import Excel */}
       <Dialog open={isImportModalOpen} onOpenChange={setIsImportModalOpen}>
+
         <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg">
@@ -1508,14 +1637,11 @@ export default function DailyActivityPage() {
             </DialogDescription>
           </DialogHeader>
 
-          {/* Konfigurasi Target Bulan & Mode Import */}
           <div className="bg-muted/40 p-3.5 rounded-xl border space-y-3 text-xs">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-2.5">
               <div className="flex items-center gap-2">
                 <CalendarDays className="size-4 text-primary" />
-                <span className="font-semibold text-foreground">
-                  Target Periode Bulan:
-                </span>
+                <span className="font-semibold text-foreground">Target Periode Bulan:</span>
               </div>
               <div className="flex items-center gap-2">
                 <input
@@ -1535,79 +1661,31 @@ export default function DailyActivityPage() {
                 Pilih metode import untuk periode {formatPeriodMonth(targetImportMonth)}:
               </span>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {/* 1. Gantikan Bulan Ini */}
-                <label
-                  className={`flex flex-col p-2.5 rounded-lg border cursor-pointer transition-colors ${
-                    importMode === "replace_month"
-                      ? "border-primary bg-primary/5 text-primary"
-                      : "border-border hover:bg-muted/50"
-                  }`}
-                >
+                <label className={`flex flex-col p-2.5 rounded-lg border cursor-pointer transition-colors ${importMode === "replace_month" ? "border-primary bg-primary/5 text-primary" : "border-border hover:bg-muted/50"}`}>
                   <div className="flex items-center gap-2 font-semibold">
-                    <input
-                      type="radio"
-                      name="daImportMode"
-                      checked={importMode === "replace_month"}
-                      onChange={() => setImportMode("replace_month")}
-                      className="accent-primary"
-                    />
+                    <input type="radio" name="daImportMode" checked={importMode === "replace_month"} onChange={() => setImportMode("replace_month")} className="accent-primary" />
                     <span>Ganti Bulan Ini</span>
                   </div>
-                  <span className="text-[11px] text-muted-foreground mt-1">
-                    Hanya data aktivitas bulan {formatPeriodMonth(targetImportMonth)} yang diganti. Bulan lain tetap aman!
-                  </span>
+                  <span className="text-[11px] text-muted-foreground mt-1">Hanya data bulan {formatPeriodMonth(targetImportMonth)} yang diganti. Bulan lain tetap aman!</span>
                 </label>
-
-                {/* 2. Tambahkan ke Bulan Ini */}
-                <label
-                  className={`flex flex-col p-2.5 rounded-lg border cursor-pointer transition-colors ${
-                    importMode === "append_month"
-                      ? "border-primary bg-primary/5 text-primary"
-                      : "border-border hover:bg-muted/50"
-                  }`}
-                >
+                <label className={`flex flex-col p-2.5 rounded-lg border cursor-pointer transition-colors ${importMode === "append_month" ? "border-primary bg-primary/5 text-primary" : "border-border hover:bg-muted/50"}`}>
                   <div className="flex items-center gap-2 font-semibold">
-                    <input
-                      type="radio"
-                      name="daImportMode"
-                      checked={importMode === "append_month"}
-                      onChange={() => setImportMode("append_month")}
-                      className="accent-primary"
-                    />
+                    <input type="radio" name="daImportMode" checked={importMode === "append_month"} onChange={() => setImportMode("append_month")} className="accent-primary" />
                     <span>Tambah ke Bulan Ini</span>
                   </div>
-                  <span className="text-[11px] text-muted-foreground mt-1">
-                    Menambahkan {importPreviewRows.length} aktivitas baru ke dalam periode {formatPeriodMonth(targetImportMonth)}.
-                  </span>
+                  <span className="text-[11px] text-muted-foreground mt-1">Menambahkan {importPreviewRows.length} aktivitas baru ke dalam periode {formatPeriodMonth(targetImportMonth)}.</span>
                 </label>
-
-                {/* 3. Ganti Semua Bulan */}
-                <label
-                  className={`flex flex-col p-2.5 rounded-lg border cursor-pointer transition-colors ${
-                    importMode === "replace_all"
-                      ? "border-rose-500 bg-rose-500/5 text-rose-700 dark:text-rose-400"
-                      : "border-border hover:bg-muted/50"
-                  }`}
-                >
+                <label className={`flex flex-col p-2.5 rounded-lg border cursor-pointer transition-colors ${importMode === "replace_all" ? "border-rose-500 bg-rose-500/5 text-rose-700 dark:text-rose-400" : "border-border hover:bg-muted/50"}`}>
                   <div className="flex items-center gap-2 font-semibold">
-                    <input
-                      type="radio"
-                      name="daImportMode"
-                      checked={importMode === "replace_all"}
-                      onChange={() => setImportMode("replace_all")}
-                      className="accent-primary"
-                    />
+                    <input type="radio" name="daImportMode" checked={importMode === "replace_all"} onChange={() => setImportMode("replace_all")} className="accent-primary" />
                     <span>Ganti Semua Bulan</span>
                   </div>
-                  <span className="text-[11px] text-muted-foreground mt-1">
-                    Menghapus seluruh aktivitas dan hanya menyimpan data baru ini.
-                  </span>
+                  <span className="text-[11px] text-muted-foreground mt-1">Menghapus seluruh aktivitas dan hanya menyimpan data baru ini.</span>
                 </label>
               </div>
             </div>
           </div>
 
-          {/* Tabel Preview (6 baris pertama) */}
           <div className="flex-1 overflow-auto border rounded-lg max-h-[260px]">
             <Table>
               <TableHeader className="bg-muted text-[11px]">
@@ -1642,38 +1720,21 @@ export default function DailyActivityPage() {
           )}
 
           <DialogFooter className="gap-2 sm:gap-0 mt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsImportModalOpen(false)}
-              disabled={isProcessingImport}
-            >
+            <Button variant="outline" size="sm" onClick={() => setIsImportModalOpen(false)} disabled={isProcessingImport}>
               Batal
             </Button>
-            <Button
-              variant="default"
-              size="sm"
-              onClick={handleConfirmImport}
-              disabled={isProcessingImport}
-              className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
-            >
+            <Button variant="default" size="sm" onClick={handleConfirmImport} disabled={isProcessingImport} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium">
               {isProcessingImport ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  <span>Menyimpan Data Bulan Ini...</span>
-                </>
+                <><Loader2 className="size-4 animate-spin" /><span>Menyimpan...</span></>
               ) : (
-                <>
-                  <CheckCircle2 className="size-4" />
-                  <span>Import ke Bulan {formatPeriodMonth(targetImportMonth)}</span>
-                </>
+                <><CheckCircle2 className="size-4" /><span>Import ke {formatPeriodMonth(targetImportMonth)}</span></>
               )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* MODAL: Tambah / Edit Aktivitas Manual - Aligned with Attendance Dialog */}
+      {/* MODAL: Tambah / Edit Aktivitas */}
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
         <DialogContent className="sm:max-w-xl">
           <form onSubmit={handleSaveForm} className="space-y-4">
@@ -1689,78 +1750,99 @@ export default function DailyActivityPage() {
             </DialogHeader>
 
             <div className="space-y-3.5 text-xs">
+              {/* Row 1: Tanggal Pengajuan + Desainer (dropdown) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Tanggal */}
                 <div className="space-y-1.5">
                   <Label htmlFor="form-activity-date" className="text-xs">
-                    Tanggal Aktivitas <span className="text-rose-500">*</span>
+                    Tanggal Pengajuan <span className="text-rose-500">*</span>
                   </Label>
                   <Input
                     id="form-activity-date"
                     type="date"
                     value={formData.activity_date}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, activity_date: e.target.value }))
-                    }
+                    onChange={(e) => setFormData((prev) => ({ ...prev, activity_date: e.target.value }))}
                     required
                     className="h-9 text-xs"
                   />
                 </div>
-
-                {/* Name / Pelaksana */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="form-activity-name" className="text-xs">
-                    Nama Pelaksana <span className="text-rose-500">*</span>
+                  <Label htmlFor="form-activity-desainer" className="text-xs">
+                    Desainer <span className="text-rose-500">*</span>
                   </Label>
-                  <Input
-                    id="form-activity-name"
+                  <Select
                     value={formData.name}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, name: e.target.value }))
-                    }
-                    placeholder="Nama staf pelaksana"
-                    maxLength={120}
-                    required
-                    className="h-9 text-xs"
-                  />
+                    onValueChange={(val) => setFormData((prev) => ({ ...prev, name: val }))}
+                  >
+                    <SelectTrigger id="form-activity-desainer" className="h-9 text-xs">
+                      <SelectValue placeholder="Pilih Desainer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Paulus Petrus Parlindungan Sianipar" className="text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-block size-2 rounded-full bg-sky-500 shrink-0" />
+                          Paulus Sianipar
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="Muhammad Farel Ramadhan" className="text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-block size-2 rounded-full bg-indigo-500 shrink-0" />
+                          Farel Ramadhan
+                        </div>
+                      </SelectItem>
+                      {/* Tampilkan nama lain dari data aktual jika ada */}
+                      {uniqueStaff
+                        .filter(
+                          (s) =>
+                            s.name !== "Paulus Sianipar" &&
+                            s.name !== "Farel Ramadhan"
+                        )
+                        .map((s) => (
+                          <SelectItem key={s.name} value={s.name} className="text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className="inline-block size-2 rounded-full bg-emerald-500 shrink-0" />
+                              {s.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
-              {/* Status */}
-              <div className="space-y-1.5">
-                <Label htmlFor="form-activity-status" className="text-xs">
-                  Status Aktivitas <span className="text-rose-500">*</span>
-                </Label>
-                <Select
-                  value={formData.status}
-                  onValueChange={(val) =>
-                    setFormData((prev) => ({ ...prev, status: val }))
-                  }
-                >
-                  <SelectTrigger id="form-activity-status" className="h-9 text-xs">
-                    <SelectValue placeholder="Pilih status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {activityStatuses.map((st) => (
-                      <SelectItem key={st} value={st} className="text-xs">
-                        {st}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              {/* Row 2: Peminta / Divisi (readonly info) + Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Peminta / Divisi</Label>
+                  <div className="h-9 flex items-center px-3 rounded-md border bg-muted/40 text-xs text-muted-foreground">
+                    Creative Design
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="form-activity-status" className="text-xs">
+                    Status <span className="text-rose-500">*</span>
+                  </Label>
+                  <Select value={formData.status} onValueChange={(val) => setFormData((prev) => ({ ...prev, status: val }))}>
+                    <SelectTrigger id="form-activity-status" className="h-9 text-xs">
+                      <SelectValue placeholder="Pilih status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activityStatuses.map((st) => (
+                        <SelectItem key={st} value={st} className="text-xs">{st}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
-              {/* Task Description */}
+              {/* Judul Permintaan (Task Description) */}
               <div className="space-y-1.5">
                 <Label htmlFor="form-task-desc" className="text-xs">
-                  Task Description <span className="text-rose-500">*</span>
+                  Judul Permintaan <span className="text-rose-500">*</span>
                 </Label>
                 <Textarea
                   id="form-task-desc"
                   value={formData.task_description}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, task_description: e.target.value }))
-                  }
+                  onChange={(e) => setFormData((prev) => ({ ...prev, task_description: e.target.value }))}
                   placeholder="Uraikan pekerjaan atau tugas yang dilaksanakan..."
                   rows={4}
                   maxLength={2000}
@@ -1769,18 +1851,16 @@ export default function DailyActivityPage() {
                 />
               </div>
 
-              {/* Remarks */}
+              {/* Target Selesai / Remarks */}
               <div className="space-y-1.5">
                 <Label htmlFor="form-activity-remarks" className="text-xs">
-                  Remarks / Keterangan (Opsional)
+                  Target Selesai / Remarks (Opsional)
                 </Label>
                 <Textarea
                   id="form-activity-remarks"
                   value={formData.remarks}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, remarks: e.target.value }))
-                  }
-                  placeholder="Catatan tambahan, kendala, atau keterangan pelengkap..."
+                  onChange={(e) => setFormData((prev) => ({ ...prev, remarks: e.target.value }))}
+                  placeholder="Catatan target penyelesaian, kendala, atau keterangan pelengkap..."
                   rows={3}
                   maxLength={1000}
                   className="text-xs resize-none"
@@ -1789,13 +1869,7 @@ export default function DailyActivityPage() {
             </div>
 
             <DialogFooter className="gap-2 sm:gap-0 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setIsFormOpen(false)}
-                disabled={isSaving}
-              >
+              <Button type="button" variant="outline" size="sm" onClick={() => setIsFormOpen(false)} disabled={isSaving}>
                 Batal
               </Button>
               <Button type="submit" size="sm" disabled={isSaving} className="gap-1.5">
@@ -1807,7 +1881,7 @@ export default function DailyActivityPage() {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL: Konfirmasi Hapus Data - Aligned with Attendance AlertDialog */}
+      {/* MODAL: Konfirmasi Hapus */}
       <AlertDialog
         open={Boolean(deleteTargetId)}
         onOpenChange={(open) => !open && setDeleteTargetId(null)}
@@ -1830,6 +1904,7 @@ export default function DailyActivityPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </Content>
   );
 }
+
