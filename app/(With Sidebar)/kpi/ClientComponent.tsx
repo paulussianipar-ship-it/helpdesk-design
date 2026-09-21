@@ -19,6 +19,9 @@ import {
   BarChart2,
   ClipboardList,
   RefreshCw,
+  Pencil,
+  Trash2,
+  Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
@@ -33,6 +36,27 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Content } from "@/components/content";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 // =====================================================================
 // TYPES
@@ -151,7 +175,53 @@ export default function KpiClientComponent() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // ——————————————————————————————
-  // FETCH KPI DATA
+  // ACTION MODALS STATE
+  // ——————————————————————————————
+  const [detailRow, setDetailRow] = useState<KpiRow | null>(null);
+  const [editingRow, setEditingRow] = useState<KpiRow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<KpiRow | null>(null);
+  const [isCustomized, setIsCustomized] = useState(false);
+
+  // Form State for Edit Modal
+  const [formData, setFormData] = useState<Omit<KpiRow, "id" | "no" | "skor" | "nilai_akhir" | "raw">>({
+    perspektif_bsc: "Learning & Growth",
+    strategy: "",
+    tujuan_strategi: "",
+    area_kinerja_utama: "",
+    kpi: "",
+    bobot: 15,
+    polarity: "Max",
+    cap: 100,
+    target: 100,
+    keterangan: "Persentase",
+    realisasi: 100,
+    cara_pengukuran: "",
+    data_source: "Daily Activity",
+    note: "A1",
+  });
+
+  const getStorageKey = useCallback((period: string) => `kpi_custom_rows_v3_${period}`, []);
+
+  const calculateRowScore = (
+    realisasi: number | null,
+    target: number,
+    cap: number,
+    bobot: number,
+    polarity: "Max" | "Min"
+  ): number | null => {
+    if (realisasi === null) return null;
+    let ratio = 0;
+    if (polarity === "Max") {
+      ratio = target > 0 ? realisasi / target : 0;
+    } else {
+      ratio = realisasi > 0 ? target / realisasi : 1;
+    }
+    const cappedRatio = Math.min(ratio, cap / 100);
+    return Math.round(cappedRatio * bobot * 100) / 100;
+  };
+
+  // ——————————————————————————————
+  // FETCH KPI DATA & APPLY CUSTOM
   // ——————————————————————————————
   const fetchData = useCallback(async (showRefresh = false) => {
     if (showRefresh) setIsRefreshing(true);
@@ -164,7 +234,32 @@ export default function KpiClientComponent() {
       const res = await fetch(`/api/kpi?${params.toString()}`);
       if (!res.ok) throw new Error(`HTTP error ${res.status}`);
       const json: KpiApiResponse = await res.json();
+
+      // Check if user has customized rows in localStorage for this period
+      const storageKey = `kpi_custom_rows_v3_${selectedMonth}`;
+      const saved = typeof window !== "undefined" ? localStorage.getItem(storageKey) : null;
+      if (saved) {
+        try {
+          const customRows: KpiRow[] = JSON.parse(saved);
+          if (Array.isArray(customRows) && customRows.length > 0) {
+            const total_bobot = customRows.reduce((sum, r) => sum + (Number(r.bobot) || 0), 0);
+            const total_nilai_akhir = customRows.reduce((sum, r) => sum + (Number(r.skor) || 0), 0);
+            setData({
+              ...json,
+              rows: customRows,
+              total_bobot,
+              total_nilai_akhir,
+            });
+            setIsCustomized(true);
+            return;
+          }
+        } catch (e) {
+          console.error("Failed to parse custom KPI rows", e);
+        }
+      }
+
       setData(json);
+      setIsCustomized(false);
     } catch (err: any) {
       toast.error("Gagal memuat data KPI: " + err.message);
     } finally {
@@ -176,6 +271,109 @@ export default function KpiClientComponent() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Open Edit Form
+  const handleOpenEdit = (row: KpiRow) => {
+    setEditingRow(row);
+    setFormData({
+      perspektif_bsc: row.perspektif_bsc,
+      strategy: row.strategy || "",
+      tujuan_strategi: row.tujuan_strategi || "",
+      area_kinerja_utama: row.area_kinerja_utama || "",
+      kpi: row.kpi,
+      bobot: row.bobot,
+      polarity: row.polarity,
+      cap: row.cap,
+      target: row.target,
+      keterangan: row.keterangan || "Persentase",
+      realisasi: row.realisasi !== null ? row.realisasi : row.target,
+      cara_pengukuran: row.cara_pengukuran || "",
+      data_source: row.data_source || "Manual",
+      note: row.note || "",
+    });
+  };
+
+  // Save Edit Form
+  const handleSaveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!data || !editingRow) return;
+
+    const newScore = calculateRowScore(
+      formData.realisasi,
+      formData.target,
+      formData.cap,
+      formData.bobot,
+      formData.polarity
+    );
+
+    const updatedRows = data.rows.map((r) => {
+      if (r.id === editingRow.id) {
+        return {
+          ...r,
+          ...formData,
+          skor: newScore,
+          nilai_akhir: newScore,
+        };
+      }
+      return r;
+    });
+
+    const total_bobot = updatedRows.reduce((sum, r) => sum + (Number(r.bobot) || 0), 0);
+    const total_nilai_akhir = updatedRows.reduce((sum, r) => sum + (Number(r.skor) || 0), 0);
+
+    const updatedData: KpiApiResponse = {
+      ...data,
+      rows: updatedRows,
+      total_bobot,
+      total_nilai_akhir,
+    };
+
+    setData(updatedData);
+    if (typeof window !== "undefined") {
+      localStorage.setItem(`kpi_custom_rows_v3_${selectedMonth}`, JSON.stringify(updatedRows));
+    }
+    setIsCustomized(true);
+    setEditingRow(null);
+    toast.success("Indikator KPI berhasil diperbarui.");
+  };
+
+  // Confirm Delete KPI Row
+  const handleConfirmDelete = () => {
+    if (!data || !deleteTarget) return;
+
+    const updatedRows = data.rows
+      .filter((r) => r.id !== deleteTarget.id)
+      .map((r, idx) => ({ ...r, no: idx + 1 }));
+
+    const total_bobot = updatedRows.reduce((sum, r) => sum + (Number(r.bobot) || 0), 0);
+    const total_nilai_akhir = updatedRows.reduce((sum, r) => sum + (Number(r.skor) || 0), 0);
+
+    const updatedData: KpiApiResponse = {
+      ...data,
+      rows: updatedRows,
+      total_bobot,
+      total_nilai_akhir,
+    };
+
+    setData(updatedData);
+    if (typeof window !== "undefined") {
+      localStorage.setItem(`kpi_custom_rows_v3_${selectedMonth}`, JSON.stringify(updatedRows));
+    }
+    setIsCustomized(true);
+    setDeleteTarget(null);
+    toast.success("Indikator KPI berhasil dihapus.");
+  };
+
+  // Reset to Default Calculation
+  const handleResetDefault = async () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(`kpi_custom_rows_v3_${selectedMonth}`);
+    }
+    setIsCustomized(false);
+    toast.info("Mengembalikan KPI ke kalkulasi default sistem...");
+    await fetchData(true);
+    toast.success("KPI berhasil dikembalikan ke kalkulasi default.");
+  };
 
   // ——————————————————————————————
   // NAVIGATION HELPERS
@@ -323,6 +521,18 @@ export default function KpiClientComponent() {
       size="lg"
       cardAction={
         <div className="flex flex-wrap items-center gap-2">
+          {isCustomized && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleResetDefault}
+              className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+              title="Kembalikan tabel ke kalkulasi default sistem"
+            >
+              <RotateCcw className="h-4 w-4" />
+              <span>Reset Default</span>
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -528,7 +738,8 @@ export default function KpiClientComponent() {
                     <th className="px-3 py-2.5 text-center font-semibold border-r w-16 bg-primary/5">Skor</th>
                     <th className="px-3 py-2.5 text-left font-semibold border-r min-w-[200px]">Cara Pengukuran</th>
                     <th className="px-3 py-2.5 text-center font-semibold border-r w-20">Data</th>
-                    <th className="px-3 py-2.5 text-center font-semibold w-10">Note</th>
+                    <th className="px-3 py-2.5 text-center font-semibold border-r w-10">Note</th>
+                    <th className="px-3 py-2.5 text-center font-semibold w-44">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -632,7 +843,42 @@ export default function KpiClientComponent() {
                         </td>
 
                         {/* Note */}
-                        <td className="px-3 py-3 text-center text-muted-foreground text-[11px] font-medium">{row.note}</td>
+                        <td className="px-3 py-3 text-center border-r text-muted-foreground text-[11px] font-medium">{row.note}</td>
+
+                        {/* Aksi: 1. Detail, 2. Edit, 3. Delete */}
+                        <td className="px-3 py-3 text-center whitespace-nowrap">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 px-2.5 text-xs font-medium hover:bg-primary/10 hover:text-primary transition-colors"
+                              onClick={() => setDetailRow(row)}
+                              title="Lihat Rincian KPI"
+                            >
+                              Detail
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 px-2.5 text-xs font-medium text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10 transition-colors"
+                              onClick={() => handleOpenEdit(row)}
+                              title="Edit Nilai & Parameter KPI"
+                            >
+                              <Pencil className="h-3 w-3 mr-1" />
+                              Edit
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 px-2.5 text-xs font-medium text-rose-600 dark:text-rose-400 border-rose-500/30 hover:bg-rose-500/10 transition-colors"
+                              onClick={() => setDeleteTarget(row)}
+                              title="Hapus Indikator KPI"
+                            >
+                              <Trash2 className="h-3 w-3 mr-1" />
+                              Delete
+                            </Button>
+                          </div>
+                        </td>
                       </tr>
                     );
                   })}
@@ -754,6 +1000,437 @@ export default function KpiClientComponent() {
           </Button>
         </div>
       )}
+
+      {/* ================================================================= */}
+      {/* 1. DETAIL MODAL                                                    */}
+      {/* ================================================================= */}
+      <Dialog open={!!detailRow} onOpenChange={(open) => !open && setDetailRow(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          {detailRow && (
+            <>
+              <DialogHeader>
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded bg-muted text-muted-foreground">
+                    KPI #{detailRow.no}
+                  </span>
+                  <Badge variant="outline" className={`text-xs ${getBscBadgeClass(detailRow.perspektif_bsc)}`}>
+                    {detailRow.perspektif_bsc}
+                  </Badge>
+                  <Badge variant="outline" className={`text-xs ${DATA_SOURCE_COLORS[detailRow.data_source] || "bg-muted/50"}`}>
+                    {detailRow.data_source}
+                  </Badge>
+                  <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded border ${
+                    detailRow.polarity === "Max" ? "text-emerald-600 border-emerald-300" : "text-rose-600 border-rose-300"
+                  }`}>
+                    {detailRow.polarity === "Max" ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                    Polarity: {detailRow.polarity}
+                  </span>
+                </div>
+                <DialogTitle className="text-lg font-bold text-foreground">
+                  {detailRow.kpi}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  Area: {detailRow.area_kinerja_utama} • Target: {detailRow.target}% ({detailRow.keterangan})
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4 py-3 text-sm">
+                {/* Metrics Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div className="rounded-lg border bg-muted/30 p-3 text-center">
+                    <div className="text-[11px] font-medium text-muted-foreground uppercase">Bobot</div>
+                    <div className="text-lg font-bold text-foreground mt-0.5">{detailRow.bobot}%</div>
+                  </div>
+                  <div className="rounded-lg border bg-muted/30 p-3 text-center">
+                    <div className="text-[11px] font-medium text-muted-foreground uppercase">Target</div>
+                    <div className="text-lg font-bold text-primary mt-0.5">{detailRow.target}%</div>
+                  </div>
+                  <div className="rounded-lg border bg-muted/30 p-3 text-center">
+                    <div className="text-[11px] font-medium text-muted-foreground uppercase">Cap Maksimal</div>
+                    <div className="text-lg font-bold text-muted-foreground mt-0.5">{detailRow.cap}%</div>
+                  </div>
+                  <div className="rounded-lg border bg-primary/5 border-primary/20 p-3 text-center">
+                    <div className="text-[11px] font-medium text-muted-foreground uppercase">Realisasi</div>
+                    <div className={`text-lg font-bold mt-0.5 ${
+                      detailRow.realisasi !== null && detailRow.realisasi >= detailRow.target
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-rose-600 dark:text-rose-400"
+                    }`}>
+                      {detailRow.realisasi !== null ? `${detailRow.realisasi}%` : "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border bg-primary/5 border-primary/20 p-3 text-center">
+                    <div className="text-[11px] font-medium text-muted-foreground uppercase">Skor KPI</div>
+                    <div className="text-lg font-bold text-primary mt-0.5">
+                      {detailRow.skor !== null ? detailRow.skor.toFixed(2) : "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border bg-muted/30 p-3 text-center">
+                    <div className="text-[11px] font-medium text-muted-foreground uppercase">Kode Note</div>
+                    <div className="text-lg font-bold text-foreground mt-0.5">{detailRow.note || "—"}</div>
+                  </div>
+                </div>
+
+                {/* Realisasi Progress Bar */}
+                {detailRow.realisasi !== null && (
+                  <div className="space-y-1.5 p-3 rounded-lg border bg-card">
+                    <div className="flex justify-between text-xs font-medium">
+                      <span>Capaian Terhadap Target</span>
+                      <span className={detailRow.realisasi >= detailRow.target ? "text-emerald-600 font-bold" : "text-rose-600 font-bold"}>
+                        {detailRow.realisasi}% / {detailRow.target}%
+                      </span>
+                    </div>
+                    <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          detailRow.realisasi >= detailRow.target ? "bg-emerald-500" : "bg-rose-500"
+                        }`}
+                        style={{ width: `${Math.min(100, (detailRow.realisasi / detailRow.target) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Tujuan Strategi */}
+                <div className="space-y-1.5 p-3 rounded-lg border bg-card">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Tujuan Strategi
+                  </div>
+                  <p className="text-foreground leading-relaxed">
+                    {detailRow.tujuan_strategi || "—"}
+                  </p>
+                </div>
+
+                {/* Cara Pengukuran */}
+                <div className="space-y-1.5 p-3 rounded-lg border bg-card">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Cara Pengukuran / Formula
+                  </div>
+                  <p className="text-foreground text-xs leading-relaxed font-mono bg-muted/40 p-2.5 rounded border">
+                    {detailRow.cara_pengukuran}
+                  </p>
+                </div>
+
+                {/* Raw Database Metadata if present */}
+                {detailRow.raw && Object.keys(detailRow.raw).length > 0 && (
+                  <div className="space-y-2 p-3 rounded-lg border bg-muted/20">
+                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Data Metrik Mentah (Database Query)
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                      {Object.entries(detailRow.raw).map(([key, val]) => (
+                        <div key={key} className="p-2 rounded bg-card border">
+                          <div className="text-muted-foreground text-[10px] capitalize">
+                            {key.replace(/_/g, " ")}
+                          </div>
+                          <div className="font-semibold text-foreground mt-0.5">
+                            {typeof val === "object" ? JSON.stringify(val) : String(val)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDetailRow(null)}>
+                  Tutup
+                </Button>
+                <Button
+                  onClick={() => {
+                    const rowToEdit = detailRow;
+                    setDetailRow(null);
+                    handleOpenEdit(rowToEdit);
+                  }}
+                  className="gap-1.5"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Edit KPI Ini
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ================================================================= */}
+      {/* 2. EDIT MODAL                                                     */}
+      {/* ================================================================= */}
+      <Dialog open={!!editingRow} onOpenChange={(open) => !open && setEditingRow(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-5 w-5 text-primary" />
+              <span>Edit Indikator KPI</span>
+            </DialogTitle>
+            <DialogDescription>
+              Perbarui target, realisasi, atau parameter bobot KPI. Skor akan otomatis dihitung ulang.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveEdit} className="space-y-4 py-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Perspektif BSC */}
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-bsc" className="text-xs">Perspektif BSC</Label>
+                <Select
+                  value={formData.perspektif_bsc}
+                  onValueChange={(val) => setFormData((prev) => ({ ...prev, perspektif_bsc: val }))}
+                >
+                  <SelectTrigger id="edit-bsc" className="h-9">
+                    <SelectValue placeholder="Pilih BSC" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Learning & Growth">Learning & Growth</SelectItem>
+                    <SelectItem value="Internal Business Process">Internal Business Process</SelectItem>
+                    <SelectItem value="Customer / Stakeholder">Customer / Stakeholder</SelectItem>
+                    <SelectItem value="Financial">Financial</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Data Source */}
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-source" className="text-xs">Sumber Data</Label>
+                <Select
+                  value={formData.data_source}
+                  onValueChange={(val) => setFormData((prev) => ({ ...prev, data_source: val }))}
+                >
+                  <SelectTrigger id="edit-source" className="h-9">
+                    <SelectValue placeholder="Sumber Data" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Permintaan Desain">Permintaan Desain</SelectItem>
+                    <SelectItem value="Daily Activity">Daily Activity</SelectItem>
+                    <SelectItem value="Attendance">Attendance</SelectItem>
+                    <SelectItem value="STB HSE">STB HSE</SelectItem>
+                    <SelectItem value="Manual">Manual</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Area Kinerja Utama */}
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-area" className="text-xs">Area Kinerja Utama</Label>
+              <Input
+                id="edit-area"
+                value={formData.area_kinerja_utama}
+                onChange={(e) => setFormData((prev) => ({ ...prev, area_kinerja_utama: e.target.value }))}
+                className="h-9"
+                required
+              />
+            </div>
+
+            {/* Nama KPI */}
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-kpi" className="text-xs">Nama Indikator KPI</Label>
+              <Textarea
+                id="edit-kpi"
+                value={formData.kpi}
+                onChange={(e) => setFormData((prev) => ({ ...prev, kpi: e.target.value }))}
+                rows={2}
+                className="resize-none text-xs"
+                required
+              />
+            </div>
+
+            {/* Tujuan Strategi */}
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-tujuan" className="text-xs">Tujuan Strategi</Label>
+              <Textarea
+                id="edit-tujuan"
+                value={formData.tujuan_strategi}
+                onChange={(e) => setFormData((prev) => ({ ...prev, tujuan_strategi: e.target.value }))}
+                rows={2}
+                className="resize-none text-xs"
+              />
+            </div>
+
+            {/* Metrik Angka: Bobot, Target, Realisasi, Cap */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-muted/20 p-3 rounded-lg border">
+              {/* Bobot */}
+              <div className="space-y-1">
+                <Label htmlFor="edit-bobot" className="text-xs font-semibold">Bobot (%)</Label>
+                <Input
+                  id="edit-bobot"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="100"
+                  value={formData.bobot}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, bobot: parseFloat(e.target.value) || 0 }))}
+                  className="h-8"
+                  required
+                />
+              </div>
+
+              {/* Target */}
+              <div className="space-y-1">
+                <Label htmlFor="edit-target" className="text-xs font-semibold">Target (%)</Label>
+                <Input
+                  id="edit-target"
+                  type="number"
+                  step="0.1"
+                  value={formData.target}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, target: parseFloat(e.target.value) || 0 }))}
+                  className="h-8"
+                  required
+                />
+              </div>
+
+              {/* Realisasi */}
+              <div className="space-y-1">
+                <Label htmlFor="edit-realisasi" className="text-xs font-semibold text-primary">Realisasi (%)</Label>
+                <Input
+                  id="edit-realisasi"
+                  type="number"
+                  step="0.01"
+                  value={formData.realisasi !== null ? formData.realisasi : ""}
+                  onChange={(e) => setFormData((prev) => ({
+                    ...prev,
+                    realisasi: e.target.value === "" ? null : parseFloat(e.target.value),
+                  }))}
+                  className="h-8 font-bold"
+                  placeholder="0"
+                />
+              </div>
+
+              {/* Cap */}
+              <div className="space-y-1">
+                <Label htmlFor="edit-cap" className="text-xs font-semibold">Cap (%)</Label>
+                <Input
+                  id="edit-cap"
+                  type="number"
+                  step="1"
+                  min="50"
+                  max="200"
+                  value={formData.cap}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, cap: parseFloat(e.target.value) || 100 }))}
+                  className="h-8"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Polarity, Satuan/Keterangan, Note */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Polarity */}
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-polarity" className="text-xs">Polarity</Label>
+                <Select
+                  value={formData.polarity}
+                  onValueChange={(val: "Max" | "Min") => setFormData((prev) => ({ ...prev, polarity: val }))}
+                >
+                  <SelectTrigger id="edit-polarity" className="h-9">
+                    <SelectValue placeholder="Pilih Polarity" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Max">Max (Semakin tinggi semakin baik)</SelectItem>
+                    <SelectItem value="Min">Min (Semakin rendah semakin baik)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Keterangan */}
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-keterangan" className="text-xs">Keterangan / Satuan</Label>
+                <Input
+                  id="edit-keterangan"
+                  value={formData.keterangan}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, keterangan: e.target.value }))}
+                  className="h-9"
+                  placeholder="Persentase"
+                />
+              </div>
+
+              {/* Note */}
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-note" className="text-xs">Kode / Note</Label>
+                <Input
+                  id="edit-note"
+                  value={formData.note}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, note: e.target.value }))}
+                  className="h-9"
+                  placeholder="A1, B1..."
+                />
+              </div>
+            </div>
+
+            {/* Cara Pengukuran */}
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-cara" className="text-xs">Cara Pengukuran / Formula</Label>
+              <Textarea
+                id="edit-cara"
+                value={formData.cara_pengukuran}
+                onChange={(e) => setFormData((prev) => ({ ...prev, cara_pengukuran: e.target.value }))}
+                rows={2}
+                className="resize-none text-xs font-mono"
+              />
+            </div>
+
+            {/* Preview Nilai Terhitung */}
+            <div className="rounded-lg bg-primary/5 border border-primary/20 p-2.5 flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">Kalkulasi Skor Terhitung:</span>
+              <span className="font-bold text-sm text-primary">
+                {calculateRowScore(
+                  formData.realisasi,
+                  formData.target,
+                  formData.cap,
+                  formData.bobot,
+                  formData.polarity
+                )?.toFixed(2) || "0.00"}
+              </span>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setEditingRow(null)}>
+                Batal
+              </Button>
+              <Button type="submit">
+                Simpan Perubahan
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ================================================================= */}
+      {/* 3. DELETE ALERT DIALOG                                            */}
+      {/* ================================================================= */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-rose-600">
+              <Trash2 className="h-5 w-5" />
+              <span>Hapus Indikator KPI</span>
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-sm">
+              <p>
+                Apakah Anda yakin ingin menghapus indikator KPI ini dari daftar periode saat ini?
+              </p>
+              {deleteTarget && (
+                <div className="p-2.5 rounded-md bg-muted text-foreground text-xs font-medium border">
+                  #{deleteTarget.no} — {deleteTarget.kpi}
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Total bobot dan skor akhir akan otomatis dihitung ulang. Anda dapat memulihkan kalkulasi semula kapan saja dengan tombol <strong>Reset Default</strong>.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              Ya, Hapus
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Content>
   );
 }
