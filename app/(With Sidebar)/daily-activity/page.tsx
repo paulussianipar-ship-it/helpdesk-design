@@ -78,6 +78,9 @@ export interface DailyActivity {
   status: string;
   remarks: string | null;
   created_at?: string;
+  departemen?: string | null;
+  project?: string | null;
+  due_date?: string | null;
 }
 
 const activityStatuses = [
@@ -148,6 +151,37 @@ function formatDateDisplay(dateStr: string): string {
   const mIndex = parseInt(m, 10) - 1;
   const monthName = monthNames[mIndex] || m;
   return `${d} ${monthName} ${y}`;
+}
+
+function getDisplayPeminta(activity: DailyActivity): { title: string; subtitle: string } {
+  if (activity.departemen && activity.departemen.trim() && activity.departemen.trim() !== "-") {
+    return { title: activity.departemen.trim(), subtitle: "Divisi Peminta" };
+  }
+  if (activity.remarks) {
+    const deptMatch = activity.remarks.match(/Departemen:\s*([^\n]+)/i);
+    if (deptMatch && deptMatch[1].trim() && deptMatch[1].trim() !== "-") {
+      return { title: deptMatch[1].trim(), subtitle: "Divisi Peminta" };
+    }
+  }
+  return { title: activity.name, subtitle: "IT / Creative" };
+}
+
+function getDisplayTargetSelesai(activity: DailyActivity): string {
+  if (activity.due_date) {
+    return formatDateDisplay(activity.due_date.slice(0, 10));
+  }
+  if (!activity.remarks) return "-";
+  const dueMatch = activity.remarks.match(/Due date:\s*([^\n]+)/i);
+  if (dueMatch) {
+    const rawDue = dueMatch[1].trim();
+    const parsed = normalizeActivityDate(rawDue);
+    if (parsed) return formatDateDisplay(parsed);
+    return rawDue.slice(0, 10);
+  }
+  if (activity.remarks.includes("Project:") && activity.remarks.includes("Departemen:")) {
+    return "Selesai";
+  }
+  return activity.remarks.trim();
 }
 
 function normalizeActivityDate(value: unknown, monthFirst = false): string | null {
@@ -289,6 +323,9 @@ export default function DailyActivityPage() {
             status: d.status || activityStatuses[4],
             remarks: d.remarks || null,
             created_at: d.created_at,
+            departemen: d.departemen || null,
+            project: d.project || null,
+            due_date: d.due_date || null,
           }));
           setActivities(mapped);
           localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(mapped));
@@ -1362,12 +1399,19 @@ export default function DailyActivityPage() {
                       )}
                     </TableCell>
 
-                    {/* Peminta / Divisi = name + divisi IT/Creative */}
+                    {/* Peminta / Divisi */}
                     <TableCell>
-                      <div className="font-medium text-sm text-foreground">
-                        {activity.name}
-                      </div>
-                      <div className="text-xs text-muted-foreground">IT / Creative</div>
+                      {(() => {
+                        const peminta = getDisplayPeminta(activity);
+                        return (
+                          <div>
+                            <div className="font-medium text-sm text-foreground">
+                              {peminta.title}
+                            </div>
+                            <div className="text-xs text-muted-foreground">{peminta.subtitle}</div>
+                          </div>
+                        );
+                      })()}
                     </TableCell>
 
                     {/* Desainer = name dengan dot warna */}
@@ -1386,15 +1430,18 @@ export default function DailyActivityPage() {
                     {/* Status */}
                     <TableCell>{renderStatusBadge(activity.status)}</TableCell>
 
-                    {/* Target Selesai = remarks (catatan / target) */}
+                    {/* Target Selesai */}
                     <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                      {activity.remarks ? (
-                        <div className="flex items-center gap-1 text-xs">
-                          <span className="line-clamp-1">{activity.remarks}</span>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">-</span>
-                      )}
+                      {(() => {
+                        const targetStr = getDisplayTargetSelesai(activity);
+                        return targetStr === "-" ? (
+                          <span className="text-xs text-muted-foreground">-</span>
+                        ) : (
+                          <div className="flex items-center gap-1 text-xs font-medium text-foreground">
+                            <span>{targetStr}</span>
+                          </div>
+                        );
+                      })()}
                     </TableCell>
 
                     {/* Aksi */}
@@ -1572,6 +1619,14 @@ export default function DailyActivityPage() {
                   <div>
                     <span className="text-muted-foreground block">Desainer</span>
                     <span className="font-medium text-foreground">{detailActivity.name}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block">Peminta / Divisi</span>
+                    <span className="font-medium text-foreground">{getDisplayPeminta(detailActivity).title}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block">Target Selesai</span>
+                    <span className="font-medium text-foreground">{getDisplayTargetSelesai(detailActivity)}</span>
                   </div>
                 </div>
               </div>

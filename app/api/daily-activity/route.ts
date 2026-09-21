@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("daily_activities")
-      .select("id, request_id, activity_date, name, task_description, status, remarks, created_at, user_id")
+      .select("id, request_id, activity_date, name, task_description, status, remarks, created_at, user_id, departemen, project, due_date")
       .order("activity_date", { ascending: false })
       .order("created_at", { ascending: false });
 
