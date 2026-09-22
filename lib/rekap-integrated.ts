@@ -40,6 +40,12 @@ export interface MonthIntegratedData {
     slaPct: number | null;
     avgDurationHours: number | null;
     eskalasi: number;
+    priorityBreakdown?: {
+      p1: { pct: number | null; done: number; total: number };
+      p2: { pct: number | null; done: number; total: number };
+      p3: { pct: number | null; done: number; total: number };
+      p4: { pct: number | null; done: number; total: number };
+    };
   };
 
   // 2. Daily Activity
@@ -89,6 +95,19 @@ export interface YearIntegratedRekap {
     permintaanAvgHours: number;
     permintaanEskalasi: number;
     permintaanStatuses: Record<string, number>;
+
+    slaAchievementYtd?: number;
+    slaGradeYtd?: string;
+    eligibleTickets?: number;
+    vendorExcluded?: number;
+    escalationCount?: number;
+    escalationPct?: number;
+    priorityOverall?: {
+      p1: { pct: number; done: number; total: number };
+      p2: { pct: number; done: number; total: number };
+      p3: { pct: number; done: number; total: number };
+      p4: { pct: number; done: number; total: number };
+    };
 
     dailyTotal: number;
     dailyDone: number;

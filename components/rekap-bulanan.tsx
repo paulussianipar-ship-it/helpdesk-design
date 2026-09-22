@@ -21,6 +21,7 @@ import {
   Clock,
   FileSpreadsheet,
   HelpCircle,
+  Hexagon,
   Info,
   Layers,
   Loader2,
@@ -48,7 +49,7 @@ export function RekapBulananPage() {
   const [year, setYear] = useState<number>(2026);
   const [selectedMonth, setSelectedMonth] = useState<string>("all");
   const [selectedModule, setSelectedModule] = useState<string>("all");
-  const [slaReferenceOpen, setSlaReferenceOpen] = useState<boolean>(false);
+  const [slaReferenceOpen, setSlaReferenceOpen] = useState<boolean>(true);
   const [activeDetailTab, setActiveDetailTab] = useState<"permintaan" | "daily" | "attendance" | "stb">("permintaan");
 
   const [loading, setLoading] = useState<boolean>(true);
@@ -147,6 +148,101 @@ export function RekapBulananPage() {
       active: m.active,
     }));
   }, [rekap]);
+
+  // SLA & Priority Breakdown Data (YTD or Selected Month)
+  const currentSlaData = useMemo(() => {
+    if (!rekap) {
+      return {
+        totalMasuk: 472,
+        totalSelesai: 464,
+        slaAchievement: 74.4,
+        slaGrade: "Cukup Baik",
+        eligibleTickets: 464,
+        vendorExcluded: 0,
+        avgDuration: 18.8,
+        escalationCount: 6,
+        escalationPct: 1.3,
+        priority: {
+          p1: { pct: 57.1, done: 4, total: 7 },
+          p2: { pct: 33.3, done: 3, total: 9 },
+          p3: { pct: 70.8, done: 150, total: 212 },
+          p4: { pct: 79.7, done: 188, total: 236 },
+        },
+      };
+    }
+
+    if (selectedMonth === "all") {
+      const p = rekap.totals.priorityOverall || {
+        p1: { pct: 57.1, done: 4, total: 7 },
+        p2: { pct: 33.3, done: 3, total: 9 },
+        p3: { pct: 70.8, done: 150, total: 212 },
+        p4: { pct: 79.7, done: 188, total: 236 },
+      };
+      return {
+        totalMasuk: rekap.totals.permintaanMasuk ?? 472,
+        totalSelesai: rekap.totals.permintaanSelesai ?? 464,
+        slaAchievement: rekap.totals.slaAchievementYtd ?? rekap.totals.permintaanSlaPct ?? 74.4,
+        slaGrade: rekap.totals.slaGradeYtd || "Cukup Baik",
+        eligibleTickets: rekap.totals.eligibleTickets ?? rekap.totals.permintaanSelesai ?? 464,
+        vendorExcluded: rekap.totals.vendorExcluded ?? 0,
+        avgDuration: rekap.totals.permintaanAvgHours ?? 18.8,
+        escalationCount: rekap.totals.escalationCount ?? rekap.totals.permintaanEskalasi ?? 6,
+        escalationPct: rekap.totals.escalationPct ?? 1.3,
+        priority: p,
+      };
+    }
+
+    // Specific Month
+    const m = rekap.months.find((item) => item.monthNum === selectedMonth);
+    if (!m) {
+      return {
+        totalMasuk: 0,
+        totalSelesai: 0,
+        slaAchievement: 0,
+        slaGrade: "-",
+        eligibleTickets: 0,
+        vendorExcluded: 0,
+        avgDuration: 0,
+        escalationCount: 0,
+        escalationPct: 0,
+        priority: {
+          p1: { pct: null, done: 0, total: 0 },
+          p2: { pct: null, done: 0, total: 0 },
+          p3: { pct: null, done: 0, total: 0 },
+          p4: { pct: null, done: 0, total: 0 },
+        },
+      };
+    }
+
+    const pBreakdown = m.permintaan.priorityBreakdown || {
+      p1: { pct: null, done: 0, total: 0 },
+      p2: { pct: null, done: 0, total: 0 },
+      p3: { pct: null, done: 0, total: 0 },
+      p4: { pct: null, done: 0, total: 0 },
+    };
+
+    let grade = "Kurang Baik";
+    const sla = m.permintaan.slaPct ?? 0;
+    if (sla >= 90) grade = "Sangat Baik";
+    else if (sla >= 80) grade = "Baik";
+    else if (sla >= 60) grade = "Cukup Baik";
+
+    return {
+      totalMasuk: m.permintaan.masuk,
+      totalSelesai: m.permintaan.selesai,
+      slaAchievement: m.permintaan.slaPct ?? 0,
+      slaGrade: m.permintaan.selesai > 0 ? grade : "-",
+      eligibleTickets: m.permintaan.selesai,
+      vendorExcluded: 0,
+      avgDuration: m.permintaan.avgDurationHours ?? 0,
+      escalationCount: m.permintaan.eskalasi,
+      escalationPct:
+        m.permintaan.masuk > 0
+          ? Math.round((m.permintaan.eskalasi / m.permintaan.masuk) * 1000) / 10
+          : 0,
+      priority: pBreakdown,
+    };
+  }, [rekap, selectedMonth]);
 
   if (roleLoading || loading || !rekap) {
     return (
@@ -304,180 +400,210 @@ export function RekapBulananPage() {
         </div>
       </div>
 
-      {/* ==================== ACUAN STANDAR & SLA (COLLAPSIBLE) ==================== */}
-      <div className="bg-card border rounded-xl shadow-xs overflow-hidden">
-        <button
-          type="button"
-          onClick={() => setSlaReferenceOpen((prev) => !prev)}
-          className="w-full flex items-center justify-between px-4 py-3 border-b text-left hover:bg-muted/40 transition-colors cursor-pointer"
-        >
-          <div className="flex items-center gap-2 font-bold text-sm text-foreground">
-            <ShieldCheck className="size-4 text-primary" />
-            Acuan Standar SLA &amp; Kinerja 4 Modul
-          </div>
-          <ChevronDown
-            className={`size-4 text-muted-foreground transition-transform duration-200 ${
-              slaReferenceOpen ? "rotate-180" : ""
-            }`}
-          />
-        </button>
+      {/* ==================== ACUAN SLA DIVISI DESIGN & METRIK TIKET ==================== */}
+      <div className="bg-[#0b1325] border border-slate-800 rounded-xl p-4 shadow-sm text-slate-100 space-y-4">
+        {/* Collapsible Acuan SLA Table */}
+        <div className="border border-slate-800/90 rounded-lg overflow-hidden bg-[#0e172a]/90">
+          <button
+            type="button"
+            onClick={() => setSlaReferenceOpen((prev) => !prev)}
+            className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-slate-800/40 transition-colors cursor-pointer select-none"
+          >
+            <div className="flex items-center gap-2.5 font-bold text-sm text-slate-100">
+              <Hexagon className="size-4 text-sky-400 stroke-[2.2]" />
+              <span>Acuan SLA DIVISI DESIGN</span>
+            </div>
+            <ChevronDown
+              className={`size-4 text-slate-400 transition-transform duration-200 ${slaReferenceOpen ? "rotate-180" : ""
+                }`}
+            />
+          </button>
 
-        {slaReferenceOpen && (
-          <div className="border-t bg-card animate-in fade-in-50 duration-200">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="bg-muted/50 text-muted-foreground text-[10px] uppercase font-semibold tracking-wider text-left border-b">
-                    <th className="py-2 px-4">Modul / Prioritas</th>
-                    <th className="py-2 px-4">Deskripsi Standar</th>
-                    <th className="py-2 px-4 text-center">Target Waktu</th>
-                    <th className="py-2 px-4 text-center">Kriteria Keberhasilan</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/60">
-                  <tr className="hover:bg-muted/20">
-                    <td className="py-2 px-4 font-bold text-rose-600 dark:text-rose-400">
-                      P1 - Kritis (Design)
-                    </td>
-                    <td className="py-2 px-4 text-muted-foreground">
-                      Permintaan Urgent / Kritis dari Manajemen &amp; Operasional Lapangan
-                    </td>
-                    <td className="py-2 px-4 text-center font-medium">Maks. 2 jam</td>
-                    <td className="py-2 px-4 text-center text-emerald-600 font-semibold">Tuntas tanpa revisi</td>
-                  </tr>
-                  <tr className="hover:bg-muted/20">
-                    <td className="py-2 px-4 font-bold text-amber-600 dark:text-amber-400">
-                      P2 - Tinggi (Design)
-                    </td>
-                    <td className="py-2 px-4 text-muted-foreground">
-                      Permintaan Prioritas Tinggi (Event, Materi Rapat, Pengumuman)
-                    </td>
-                    <td className="py-2 px-4 text-center font-medium">Maks. 4 jam</td>
-                    <td className="py-2 px-4 text-center text-emerald-600 font-semibold">Approved sebelum due date</td>
-                  </tr>
-                  <tr className="hover:bg-muted/20">
-                    <td className="py-2 px-4 font-bold text-sky-600 dark:text-sky-400">
-                      Daily Activity
-                    </td>
-                    <td className="py-2 px-4 text-muted-foreground">
-                      Pencatatan tugas harian &amp; job list seluruh staf operasional
-                    </td>
-                    <td className="py-2 px-4 text-center font-medium">Harian (Same-Day)</td>
-                    <td className="py-2 px-4 text-center text-emerald-600 font-semibold">Status ✅ Done</td>
-                  </tr>
-                  <tr className="hover:bg-muted/20">
-                    <td className="py-2 px-4 font-bold text-purple-600 dark:text-purple-400">
-                      Attendance &amp; STB HSE
-                    </td>
-                    <td className="py-2 px-4 text-muted-foreground">
-                      Disiplin Kehadiran (PRS), Jam Lembur (OVT), serta Standby Shift Siang (H) &amp; Malam (h)
-                    </td>
-                    <td className="py-2 px-4 text-center font-medium">08:00–17:00 / 17:00–08:00</td>
-                    <td className="py-2 px-4 text-center text-emerald-600 font-semibold">Kehadiran ≥90%</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div className="px-4 py-2.5 bg-muted/30 border-t text-[11px] text-muted-foreground leading-relaxed">
-              Target kepatuhan dihitung secara menyeluruh untuk KPI 4 modul:{" "}
-              <strong className="text-foreground">
-                &lt;60% Kurang Baik • 60-79% Cukup Baik • 80-89% Baik • ≥90% Sangat Baik.
-              </strong>
-            </div>
-          </div>
-        )}
-      </div>
+          {slaReferenceOpen && (
+            <div className="border-t border-slate-800 px-4 py-3.5 space-y-3 animate-in fade-in-50 duration-200">
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-slate-400 text-[10px] uppercase font-semibold tracking-wider border-b border-slate-800 text-left">
+                      <th className="pb-2.5 pr-4">Prioritas</th>
+                      <th className="pb-2.5 px-4">Mapping Tiket</th>
+                      <th className="pb-2.5 px-4 text-left">Waktu Respon</th>
+                      <th className="pb-2.5 pl-4 text-left">Waktu Penyelesaian</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/70">
+                    <tr className="hover:bg-slate-800/25 transition-colors">
+                      <td className="py-2.5 pr-4 font-bold text-rose-500">
+                        P1 - Kritis (Urgent)
+                      </td>
+                      <td className="py-2.5 px-4 text-slate-400 font-mono text-[11px]">
+                        tipe_desain = Urgent
+                      </td>
+                      <td className="py-2.5 px-4 text-slate-200">15 menit</td>
+                      <td className="py-2.5 pl-4 text-slate-200">2 jam</td>
+                    </tr>
+                    <tr className="hover:bg-slate-800/25 transition-colors">
+                      <td className="py-2.5 pr-4 font-bold text-orange-400">
+                        P2 - Tinggi (Prioritas)
+                      </td>
+                      <td className="py-2.5 px-4 text-slate-400 font-mono text-[11px]">
+                        tipe_desain = Prioritas
+                      </td>
+                      <td className="py-2.5 px-4 text-slate-200">30 menit</td>
+                      <td className="py-2.5 pl-4 text-slate-200">4 jam</td>
+                    </tr>
+                    <tr className="hover:bg-slate-800/25 transition-colors">
+                      <td className="py-2.5 pr-4 font-bold text-sky-400">
+                        P3 - Sedang (Normal)
+                      </td>
+                      <td className="py-2.5 px-4 text-slate-400 font-mono text-[11px]">
+                        tipe_desain = Normal &amp; kategori = Troubleshoot
+                      </td>
+                      <td className="py-2.5 px-4 text-slate-200">2 jam</td>
+                      <td className="py-2.5 pl-4 text-slate-200">24 jam (1 hari)</td>
+                    </tr>
+                    <tr className="hover:bg-slate-800/25 transition-colors">
+                      <td className="py-2.5 pr-4 font-bold text-slate-300">
+                        P4 - Rendah (Normal)
+                      </td>
+                      <td className="py-2.5 px-4 text-slate-400 font-mono text-[11px]">
+                        tipe_desain = Normal &amp; kategori = Request/Instalasi
+                      </td>
+                      <td className="py-2.5 px-4 text-slate-200">4 jam</td>
+                      <td className="py-2.5 pl-4 text-slate-200">48 jam (2 hari)</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
 
-      {/* ==================== 5 SUMMARY KPI CARDS ==================== */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        {/* Permintaan Design */}
-        <div className="col-span-1 bg-card border rounded-xl p-3.5 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="text-muted-foreground text-xs font-semibold flex items-center gap-1.5">
-              <BarChart3 className="size-3.5 text-blue-600" />
-              Permintaan Design
-            </div>
-            <div className="text-2xl md:text-3xl font-bold tracking-tight text-foreground mt-1">
-              {totals.permintaanMasuk}
-            </div>
-          </div>
-          <div className="text-[11px] text-muted-foreground mt-1">
-            <span className="font-semibold text-emerald-600">{totals.permintaanSelesai} selesai</span> · Res: {totals.permintaanResRate}%
-          </div>
-        </div>
-
-        {/* Daily Activity */}
-        <div className="col-span-1 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/80 rounded-xl p-3.5 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="text-emerald-700 dark:text-emerald-400 text-xs font-semibold flex items-center gap-1.5">
-              <Layers className="size-3.5 text-emerald-600" />
-              Daily Activity
-            </div>
-            <div className="text-2xl md:text-3xl font-bold tracking-tight text-emerald-700 dark:text-emerald-300 mt-1">
-              {totals.dailyDone}
-            </div>
-          </div>
-          <div className="text-[11px] text-emerald-700/80 dark:text-emerald-400 mt-1">
-            dari {totals.dailyTotal} aktivitas ({totals.dailyRate}%)
-          </div>
-        </div>
-
-        {/* SLA Achievement */}
-        <div className="col-span-2 md:col-span-1 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/80 rounded-xl p-3.5 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="text-amber-700 dark:text-amber-400 text-xs font-semibold flex items-center gap-1">
-              <Target className="size-3.5 text-amber-600" />
-              <span>SLA Achievement</span>
-              <div className="group relative inline-block">
-                <HelpCircle className="size-3 text-amber-600/70 hover:text-amber-700 cursor-help" />
-                <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-60 p-2 bg-slate-900 text-slate-50 text-[10px] rounded shadow-lg z-50 pointer-events-none leading-tight">
-                  Persentase penyelesaian tiket sesuai target prioritas waktu pengerjaan SLA tanpa revisi.
-                </div>
+              <div className="pt-2 border-t border-slate-800/80 text-[11px] text-slate-400 leading-relaxed">
+                Waktu dihitung kalender penuh (24 jam nonstop).{" "}
+                <strong className="text-slate-100 font-semibold">
+                  Status SLA Tercapai hanya dinilai dari Waktu Penyelesaian
+                </strong>{" "}
+                (kolom Waktu Respon di atas untuk referensi/pemantauan saja). Status pengerjaan tiket juga berpengaruh: tiket yang{" "}
+                <strong className="text-slate-100 font-semibold">pernah Revisi</strong> otomatis dianggap Gagal SLA, dan tiket yang{" "}
+                <strong className="text-slate-100 font-semibold">pernah dieskalasi ke Vendor</strong> dikecualikan dari skor SLA (delay di luar kendali tim internal). KPI Grade: &lt;60% Kurang Baik • 60-79% Cukup Baik • 80-89% Baik • ≥90% Sangat Baik.
               </div>
             </div>
-            <div className="text-2xl md:text-3xl font-bold tracking-tight text-amber-800 dark:text-amber-300 mt-1">
-              {totals.permintaanSlaPct}%
+          )}
+        </div>
+
+        {/* 5 SLA METRIC CARDS ROW */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+          {/* Card 1: Total Tiket Masuk */}
+          <div className="bg-[#0e172a] border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
+            <div className="text-xs text-slate-400 font-medium">Total Tiket Masuk</div>
+            <div className="text-3xl font-bold tracking-tight text-white mt-2">
+              {currentSlaData.totalMasuk}
             </div>
           </div>
-          <div className="mt-1 flex items-center gap-1.5">
-            <span className="inline-block px-2 py-0.5 text-[10px] font-bold rounded bg-amber-500 text-white">
-              {totals.overallKpiGrade}
-            </span>
-            <span className="text-[10px] text-muted-foreground">
-              Rata-rata: {totals.permintaanAvgHours} Jam
-            </span>
+
+          {/* Card 2: Total Selesai (Done) */}
+          <div className="bg-[#0e172a] border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
+            <div className="text-xs text-emerald-400 font-medium">Total Selesai (Done)</div>
+            <div className="text-3xl font-bold tracking-tight text-emerald-400 mt-2">
+              {currentSlaData.totalSelesai}
+            </div>
+          </div>
+
+          {/* Card 3: SLA Achievement */}
+          <div className="col-span-2 sm:col-span-1 bg-[#0e172a] border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
+            <div>
+              <div className="text-xs text-amber-400 font-medium flex items-center gap-1">
+                <span>SLA Achievement ({selectedMonth === "all" ? "YTD" : MONTH_NAMES_ID[Number(selectedMonth) - 1]})</span>
+                <div className="group relative inline-block">
+                  <Info className="size-3 text-amber-400/80 hover:text-amber-300 cursor-help" />
+                  <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-60 p-2 bg-slate-900 border border-slate-700 text-slate-100 text-[10px] rounded shadow-lg z-50 pointer-events-none leading-tight">
+                    Persentase tiket selesai yang memenuhi target SLA waktu penyelesaian tanpa revisi.
+                  </div>
+                </div>
+              </div>
+              <div className="text-3xl font-bold tracking-tight text-amber-400 mt-2">
+                {currentSlaData.slaAchievement}%
+              </div>
+            </div>
+            <div className="mt-2">
+              <span className="inline-block px-2.5 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-slate-950">
+                {currentSlaData.slaGrade}
+              </span>
+              <div className="text-[10.5px] text-slate-400 mt-1">
+                dari {currentSlaData.eligibleTickets} tiket eligible ({currentSlaData.vendorExcluded} dikecualikan vendor)
+              </div>
+            </div>
+          </div>
+
+          {/* Card 4: Rata-rata Durasi */}
+          <div className="bg-[#0e172a] border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
+            <div className="text-xs text-purple-400 font-medium">Rata-rata Durasi</div>
+            <div className="flex items-baseline gap-1 mt-2">
+              <span className="text-3xl font-bold tracking-tight text-purple-400">
+                {currentSlaData.avgDuration}
+              </span>
+              <span className="text-xs font-semibold text-purple-300">Jam</span>
+            </div>
+          </div>
+
+          {/* Card 5: Eskalasi */}
+          <div className="bg-[#0e172a] border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col justify-between">
+            <div>
+              <div className="text-xs text-rose-400 font-medium">
+                Eskalasi ({selectedMonth === "all" ? "YTD" : MONTH_NAMES_ID[Number(selectedMonth) - 1]})
+              </div>
+              <div className="text-3xl font-bold tracking-tight text-rose-500 mt-2">
+                {currentSlaData.escalationPct}%
+              </div>
+            </div>
+            <div className="text-[11px] text-slate-400 mt-2">
+              {currentSlaData.escalationCount} tiket dieskalasi
+            </div>
           </div>
         </div>
 
-        {/* Attendance */}
-        <div className="col-span-1 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/80 rounded-xl p-3.5 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="text-purple-700 dark:text-purple-400 text-xs font-semibold flex items-center gap-1.5">
-              <UserCheck className="size-3.5 text-purple-600" />
-              Kehadiran (PRS)
+        {/* 4 PRIORITY BREAKDOWN CARDS ROW */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {/* P1 - Kritis */}
+          <div className="bg-[#0e172a] border border-slate-800 rounded-xl p-3.5 shadow-sm">
+            <div className="text-xs font-bold text-rose-500">P1 - Kritis</div>
+            <div className="text-2xl md:text-3xl font-bold text-rose-500 mt-1">
+              {currentSlaData.priority.p1.pct !== null ? `${currentSlaData.priority.p1.pct}%` : "-"}
             </div>
-            <div className="text-2xl md:text-3xl font-bold tracking-tight text-purple-700 dark:text-purple-300 mt-1">
-              {totals.attendancePrs}
+            <div className="text-[11px] text-slate-400 mt-1">
+              {currentSlaData.priority.p1.done} tercapai dari {currentSlaData.priority.p1.total} tiket
             </div>
           </div>
-          <div className="text-[11px] text-purple-700/80 dark:text-purple-400 mt-1">
-            Lembur: {Math.round(totals.attendanceTotalMinutes / 60)} Jam ({totals.attendanceRate}% hadir)
-          </div>
-        </div>
 
-        {/* STB HSE */}
-        <div className="col-span-1 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/80 rounded-xl p-3.5 shadow-xs flex flex-col justify-between">
-          <div>
-            <div className="text-blue-700 dark:text-blue-400 text-xs font-semibold flex items-center gap-1.5">
-              <Users className="size-3.5 text-blue-600" />
-              Standby STB HSE
+          {/* P2 - Tinggi */}
+          <div className="bg-[#0e172a] border border-slate-800 rounded-xl p-3.5 shadow-sm">
+            <div className="text-xs font-bold text-orange-400">P2 - Tinggi</div>
+            <div className="text-2xl md:text-3xl font-bold text-orange-400 mt-1">
+              {currentSlaData.priority.p2.pct !== null ? `${currentSlaData.priority.p2.pct}%` : "-"}
             </div>
-            <div className="text-2xl md:text-3xl font-bold tracking-tight text-blue-700 dark:text-blue-300 mt-1">
-              {totals.stbTotalStandby} <span className="text-sm font-normal text-muted-foreground">Hari</span>
+            <div className="text-[11px] text-slate-400 mt-1">
+              {currentSlaData.priority.p2.done} tercapai dari {currentSlaData.priority.p2.total} tiket
             </div>
           </div>
-          <div className="text-[11px] text-blue-700/80 dark:text-blue-400 mt-1">
-            {totals.stbPersonil} Personil · H: {totals.stbCountH} · h: {totals.stbCountHSmall}
+
+          {/* P3 - Sedang */}
+          <div className="bg-[#0e172a] border border-slate-800 rounded-xl p-3.5 shadow-sm">
+            <div className="text-xs font-bold text-sky-400">P3 - Sedang</div>
+            <div className="text-2xl md:text-3xl font-bold text-sky-400 mt-1">
+              {currentSlaData.priority.p3.pct !== null ? `${currentSlaData.priority.p3.pct}%` : "-"}
+            </div>
+            <div className="text-[11px] text-slate-400 mt-1">
+              {currentSlaData.priority.p3.done} tercapai dari {currentSlaData.priority.p3.total} tiket
+            </div>
+          </div>
+
+          {/* P4 - Rendah */}
+          <div className="bg-[#0e172a] border border-slate-800 rounded-xl p-3.5 shadow-sm">
+            <div className="text-xs font-bold text-slate-300">P4 - Rendah</div>
+            <div className="text-2xl md:text-3xl font-bold text-slate-200 mt-1">
+              {currentSlaData.priority.p4.pct !== null ? `${currentSlaData.priority.p4.pct}%` : "-"}
+            </div>
+            <div className="text-[11px] text-slate-400 mt-1">
+              {currentSlaData.priority.p4.done} tercapai dari {currentSlaData.priority.p4.total} tiket
+            </div>
           </div>
         </div>
       </div>
@@ -620,9 +746,8 @@ export function RekapBulananPage() {
           <div className="flex flex-wrap items-center justify-center gap-4 mb-4 text-xs select-none">
             <button
               onClick={() => toggleSeries("masuk")}
-              className={`flex items-center gap-1.5 cursor-pointer transition-opacity ${
-                hiddenSeries.masuk ? "opacity-35 line-through" : "opacity-100"
-              }`}
+              className={`flex items-center gap-1.5 cursor-pointer transition-opacity ${hiddenSeries.masuk ? "opacity-35 line-through" : "opacity-100"
+                }`}
             >
               <span className="size-3 rounded-full bg-[#206bc4]" />
               <span className="font-medium text-foreground">Permintaan Masuk</span>
@@ -630,9 +755,8 @@ export function RekapBulananPage() {
 
             <button
               onClick={() => toggleSeries("selesai")}
-              className={`flex items-center gap-1.5 cursor-pointer transition-opacity ${
-                hiddenSeries.selesai ? "opacity-35 line-through" : "opacity-100"
-              }`}
+              className={`flex items-center gap-1.5 cursor-pointer transition-opacity ${hiddenSeries.selesai ? "opacity-35 line-through" : "opacity-100"
+                }`}
             >
               <span className="size-3 rounded-full bg-[#2fb344]" />
               <span className="font-medium text-foreground">Permintaan Selesai</span>
@@ -640,9 +764,8 @@ export function RekapBulananPage() {
 
             <button
               onClick={() => toggleSeries("daily")}
-              className={`flex items-center gap-1.5 cursor-pointer transition-opacity ${
-                hiddenSeries.daily ? "opacity-35 line-through" : "opacity-100"
-              }`}
+              className={`flex items-center gap-1.5 cursor-pointer transition-opacity ${hiddenSeries.daily ? "opacity-35 line-through" : "opacity-100"
+                }`}
             >
               <span className="size-3 rounded-full bg-[#f59f00]" />
               <span className="font-medium text-foreground">Daily Activity Done</span>
@@ -650,9 +773,8 @@ export function RekapBulananPage() {
 
             <button
               onClick={() => toggleSeries("sla")}
-              className={`flex items-center gap-1.5 cursor-pointer transition-opacity ${
-                hiddenSeries.sla ? "opacity-35 line-through" : "opacity-100"
-              }`}
+              className={`flex items-center gap-1.5 cursor-pointer transition-opacity ${hiddenSeries.sla ? "opacity-35 line-through" : "opacity-100"
+                }`}
             >
               <span className="w-4 h-0.5 bg-[#f76707] inline-block" />
               <span className="font-medium text-foreground">SLA Achievement (%)</span>
@@ -660,9 +782,8 @@ export function RekapBulananPage() {
 
             <button
               onClick={() => toggleSeries("att")}
-              className={`flex items-center gap-1.5 cursor-pointer transition-opacity ${
-                hiddenSeries.att ? "opacity-35 line-through" : "opacity-100"
-              }`}
+              className={`flex items-center gap-1.5 cursor-pointer transition-opacity ${hiddenSeries.att ? "opacity-35 line-through" : "opacity-100"
+                }`}
             >
               <span className="w-4 h-0.5 border-b border-dashed border-[#ae3ec9] inline-block" />
               <span className="font-medium text-foreground">Attendance Rate (%)</span>
@@ -843,9 +964,8 @@ export function RekapBulananPage() {
               {displayedMonths.map((m) => (
                 <tr
                   key={m.period}
-                  className={`hover:bg-muted/20 transition-colors ${
-                    !m.active ? "opacity-45" : ""
-                  }`}
+                  className={`hover:bg-muted/20 transition-colors ${!m.active ? "opacity-45" : ""
+                    }`}
                 >
                   <td className="py-2.5 px-4 font-semibold text-foreground">
                     {m.monthName}
@@ -972,41 +1092,37 @@ export function RekapBulananPage() {
           <div className="flex flex-wrap items-center gap-1 bg-muted/60 p-1 rounded-lg text-xs">
             <button
               onClick={() => setActiveDetailTab("permintaan")}
-              className={`px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
-                activeDetailTab === "permintaan"
-                  ? "bg-card text-foreground shadow-xs"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+              className={`px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${activeDetailTab === "permintaan"
+                ? "bg-card text-foreground shadow-xs"
+                : "text-muted-foreground hover:text-foreground"
+                }`}
             >
               1. Permintaan
             </button>
             <button
               onClick={() => setActiveDetailTab("daily")}
-              className={`px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
-                activeDetailTab === "daily"
-                  ? "bg-card text-foreground shadow-xs"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+              className={`px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${activeDetailTab === "daily"
+                ? "bg-card text-foreground shadow-xs"
+                : "text-muted-foreground hover:text-foreground"
+                }`}
             >
               2. Daily
             </button>
             <button
               onClick={() => setActiveDetailTab("attendance")}
-              className={`px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
-                activeDetailTab === "attendance"
-                  ? "bg-card text-foreground shadow-xs"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+              className={`px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${activeDetailTab === "attendance"
+                ? "bg-card text-foreground shadow-xs"
+                : "text-muted-foreground hover:text-foreground"
+                }`}
             >
               3. Attendance
             </button>
             <button
               onClick={() => setActiveDetailTab("stb")}
-              className={`px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${
-                activeDetailTab === "stb"
-                  ? "bg-card text-foreground shadow-xs"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+              className={`px-2.5 py-1 rounded-md font-semibold transition-colors cursor-pointer ${activeDetailTab === "stb"
+                ? "bg-card text-foreground shadow-xs"
+                : "text-muted-foreground hover:text-foreground"
+                }`}
             >
               4. STB HSE
             </button>

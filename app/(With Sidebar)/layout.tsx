@@ -19,6 +19,7 @@ import { createClient } from "@/lib/supabase/client";
 import { redirect, usePathname } from "next/navigation";
 import { Fragment, ReactNode, useEffect } from "react";
 import { toast } from "sonner";
+import { ThemeSwitcher } from "@/components/theme-switcher";
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   function urlToBreadcrumb(pathname: string) {
@@ -118,6 +119,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                   {urlToBreadcrumb(usePathname())}
                 </BreadcrumbList>
               </Breadcrumb>
+              <div className="ml-auto flex items-center gap-2 shrink-0">
+                <ThemeSwitcher />
+              </div>
             </div>
           </header>
           <div className="flex flex-1 flex-col gap-4 p-3 sm:p-4 lg:p-6 pt-3 sm:pt-4 min-w-0">
