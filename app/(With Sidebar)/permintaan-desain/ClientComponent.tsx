@@ -40,6 +40,12 @@ import {
   Hourglass,
   AlertCircle,
   FolderKanban,
+  Printer,
+  Monitor,
+  Image as ImageIcon,
+  Video,
+  TrendingUp,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -76,6 +82,9 @@ interface Permintaan {
   admin_name?: string;
   departemen?: string;
   deskripsi?: string;
+  category?: string;
+  is_tercapai?: boolean;
+  hasil_label?: string;
 }
 
 interface MonthStats {
@@ -85,6 +94,19 @@ interface MonthStats {
   review: number;
   revision: number;
   done: number;
+  hasil?: {
+    tercapai: number;
+    tercapaiPct: number;
+    tidakTercapai: number;
+    tidakTercapaiPct: number;
+  };
+  kategori?: {
+    designCetak: number;
+    designDigital: number;
+    editingFoto: number;
+    editingVideo: number;
+    totalTiket: number;
+  };
 }
 
 const LIMIT_OPTIONS = [10, 25, 50, 100];
@@ -171,6 +193,8 @@ export default function PermintaanList() {
   const statusFilter = searchParams.get("status") || "";
   const designerFilter = searchParams.get("designer") || "";
   const scopeFilter = searchParams.get("scope") || "all";
+  const categoryFilter = searchParams.get("category") || "";
+  const hasilFilter = searchParams.get("hasil") || "";
   const limit = Number(searchParams.get("limit") || 10);
 
   const [searchInput, setSearchInput] = useState(searchTerm);
@@ -210,6 +234,8 @@ export default function PermintaanList() {
       if (statusFilter && statusFilter !== "all") params.set("status", statusFilter);
       if (designerFilter && designerFilter !== "all") params.set("designer", designerFilter);
       if (scopeFilter === "mine" && currentUser?.id) params.set("requester", currentUser.id);
+      if (categoryFilter && categoryFilter !== "all") params.set("category", categoryFilter);
+      if (hasilFilter && hasilFilter !== "all") params.set("hasil", hasilFilter);
 
       const res = await fetch(`/api/permintaan?${params.toString()}`);
       if (!res.ok) {
@@ -235,6 +261,8 @@ export default function PermintaanList() {
     statusFilter,
     designerFilter,
     scopeFilter,
+    categoryFilter,
+    hasilFilter,
     currentUser,
   ]);
 
@@ -298,6 +326,22 @@ export default function PermintaanList() {
     });
   };
 
+  const toggleHasilFilter = (val: string) => {
+    if (hasilFilter === val) {
+      handleFilter("hasil", undefined);
+    } else {
+      handleFilter("hasil", val);
+    }
+  };
+
+  const toggleCategoryFilter = (val: string) => {
+    if (categoryFilter === val) {
+      handleFilter("category", undefined);
+    } else {
+      handleFilter("category", val);
+    }
+  };
+
   const handleShiftMonth = (direction: -1 | 1) => {
     const current = selectedMonth === "all" ? getCurrentMonthPeriod() : selectedMonth;
     const [yearStr, monthStr] = current.split("-");
@@ -327,7 +371,7 @@ export default function PermintaanList() {
     return () => clearTimeout(t);
   }, [searchInput]);
 
-  // 5. Export Excel (Sesuai Bulan Aktif untuk SEMUA Role)
+  // 5. Export Excel (Sesuai Bulan Aktif untuk SEMUA Role, termasuk Tabel Hasil & Kategori)
   const handleDownloadExcel = async () => {
     setIsExporting(true);
     try {
@@ -338,11 +382,14 @@ export default function PermintaanList() {
       if (statusFilter && statusFilter !== "all") params.set("status", statusFilter);
       if (designerFilter && designerFilter !== "all") params.set("designer", designerFilter);
       if (scopeFilter === "mine" && currentUser?.id) params.set("requester", currentUser.id);
+      if (categoryFilter && categoryFilter !== "all") params.set("category", categoryFilter);
+      if (hasilFilter && hasilFilter !== "all") params.set("hasil", hasilFilter);
 
       const res = await fetch(`/api/permintaan?${params.toString()}`);
       if (!res.ok) throw new Error("Gagal mengambil data untuk export");
       const json = await res.json();
       const rows = json.data || [];
+      const stats = json.stats || monthStats;
 
       const excelData = rows.map((item: any, i: number) => ({
         No: i + 1,
@@ -364,6 +411,8 @@ export default function PermintaanList() {
             })
           : "-",
         "Judul Permintaan": item.judul,
+        "Kategori Desain": item.category || "-",
+        "Hasil": item.hasil_label || "-",
         "Jenis Proyek": item.project,
         "Departemen / Divisi": item.departemen,
         "Peminta / Pelapor": item.requester_name || "Pelapor",
@@ -372,10 +421,44 @@ export default function PermintaanList() {
         "Deskripsi / Kendala": item.deskripsi,
       }));
 
-      const ws = XLSX.utils.json_to_sheet(excelData);
       const wb = XLSX.utils.book_new();
-      const sheetName = selectedMonth === "all" ? "Semua Permintaan" : `Bulan ${selectedMonth}`;
-      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+      // Sheet 1: Ringkasan Hasil & Kategori Desain (Sesuai Format Excel Pengguna)
+      const summaryRows = [
+        ["LAPORAN RINGKASAN & PERHITUNGAN PERMINTAAN DESAIN"],
+        ["Periode:", selectedMonth === "all" ? "Semua Periode" : formatMonthPeriod(selectedMonth)],
+        [
+          "Tanggal Unduh:",
+          new Date().toLocaleDateString("id-ID", {
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+        ],
+        [],
+        ["HASIL PENGERJAAN", "", ""],
+        ["Hasil", "Jumlah", "Persentase"],
+        ["Tercapai", stats.hasil?.tercapai ?? 0, `${stats.hasil?.tercapaiPct ?? 0}%`],
+        ["Tidak Tercapai", stats.hasil?.tidakTercapai ?? 0, `${stats.hasil?.tidakTercapaiPct ?? 0}%`],
+        [],
+        ["KATEGORI DESAIN", ""],
+        ["Kategori Desain", "Jumlah Tiket"],
+        ["Design Cetak", stats.kategori?.designCetak ?? 0],
+        ["Design Digital", stats.kategori?.designDigital ?? 0],
+        ["Editing Foto", stats.kategori?.editingFoto ?? 0],
+        ["Editing Video", stats.kategori?.editingVideo ?? 0],
+        ["Total tiket", stats.kategori?.totalTiket ?? rows.length],
+      ];
+
+      const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
+      XLSX.utils.book_append_sheet(wb, wsSummary, "Ringkasan & Kategori");
+
+      // Sheet 2: Detail Tiket
+      const wsData = XLSX.utils.json_to_sheet(excelData);
+      const sheetName = selectedMonth === "all" ? "Semua Tiket" : `Daftar Tiket`;
+      XLSX.utils.book_append_sheet(wb, wsData, sheetName);
 
       const fileNameMonth =
         selectedMonth === "all"
@@ -460,6 +543,8 @@ export default function PermintaanList() {
       (statusFilter && statusFilter !== "all") ||
       (designerFilter && designerFilter !== "all") ||
       (scopeFilter && scopeFilter !== "all") ||
+      (categoryFilter && categoryFilter !== "all") ||
+      (hasilFilter && hasilFilter !== "all") ||
       selectedMonth !== currentMonth
   );
 
@@ -611,7 +696,278 @@ export default function PermintaanList() {
         </div>
       </div>
 
-      {/* 2. RINGKASAN STATUS BULANAN (METRIC KPI CARDS) */}
+      {/* 2. TABEL PERHITUNGAN: HASIL & KATEGORI DESAIN (SESUAI EXCEL) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mb-5">
+        {/* TABEL HASIL */}
+        <div className="lg:col-span-5 flex flex-col">
+          <div className="border border-border/80 rounded-xl overflow-hidden bg-card shadow-xs flex-1 flex flex-col">
+            {/* Header dengan aksen Peach #fce4d6 sesuai screenshot Excel */}
+            <div className="border-b bg-[#fce4d6] dark:bg-amber-950/40 px-4 py-2.5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-stone-800 dark:text-amber-200" />
+                <span className="font-bold text-sm text-stone-900 dark:text-amber-100 tracking-wide">
+                  Hasil
+                </span>
+              </div>
+              {hasilFilter && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 text-[11px] px-2 text-stone-700 dark:text-amber-200 hover:text-stone-900"
+                  onClick={() => handleFilter("hasil", undefined)}
+                >
+                  Reset Filter
+                </Button>
+              )}
+            </div>
+
+            <div className="p-3.5 flex-1 flex flex-col justify-between">
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b text-muted-foreground">
+                      <th className="text-left font-medium pb-2 px-1.5">Status Pengerjaan</th>
+                      <th className="text-right font-medium pb-2 px-1.5">Jumlah</th>
+                      <th className="text-right font-medium pb-2 px-1.5">Persentase</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    <tr
+                      onClick={() => toggleHasilFilter("Tercapai")}
+                      className={`cursor-pointer transition-colors group hover:bg-muted/50 ${
+                        hasilFilter === "Tercapai"
+                          ? "bg-emerald-500/15 font-semibold ring-1 ring-emerald-500/40"
+                          : ""
+                      }`}
+                      title="Klik untuk memfilter tiket Tercapai"
+                    >
+                      <td className="py-2.5 px-1.5 flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                        <span className="text-foreground group-hover:text-emerald-600 dark:group-hover:text-emerald-400 font-medium">
+                          Tercapai
+                        </span>
+                        {hasilFilter === "Tercapai" && (
+                          <Badge variant="outline" className="text-[10px] h-4 px-1 border-emerald-500/40 text-emerald-600">
+                            Aktif
+                          </Badge>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-1.5 text-right font-semibold font-mono text-foreground text-sm">
+                        {monthStats.hasil?.tercapai ?? 0}
+                      </td>
+                      <td className="py-2.5 px-1.5 text-right font-bold text-emerald-600 dark:text-emerald-400 font-mono text-sm">
+                        {monthStats.hasil?.tercapaiPct ?? 0}%
+                      </td>
+                    </tr>
+
+                    <tr
+                      onClick={() => toggleHasilFilter("Tidak Tercapai")}
+                      className={`cursor-pointer transition-colors group hover:bg-muted/50 ${
+                        hasilFilter === "Tidak Tercapai"
+                          ? "bg-amber-500/15 font-semibold ring-1 ring-amber-500/40"
+                          : ""
+                      }`}
+                      title="Klik untuk memfilter tiket Tidak Tercapai"
+                    >
+                      <td className="py-2.5 px-1.5 flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-amber-500 shrink-0" />
+                        <span className="text-foreground group-hover:text-amber-600 dark:group-hover:text-amber-400 font-medium">
+                          Tidak Tercapai
+                        </span>
+                        {hasilFilter === "Tidak Tercapai" && (
+                          <Badge variant="outline" className="text-[10px] h-4 px-1 border-amber-500/40 text-amber-600">
+                            Aktif
+                          </Badge>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-1.5 text-right font-semibold font-mono text-foreground text-sm">
+                        {monthStats.hasil?.tidakTercapai ?? 0}
+                      </td>
+                      <td className="py-2.5 px-1.5 text-right font-bold text-amber-600 dark:text-amber-400 font-mono text-sm">
+                        {monthStats.hasil?.tidakTercapaiPct ?? 0}%
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Progress Bar Visual */}
+              <div className="mt-3.5 pt-2.5 border-t">
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1.5">
+                  <span>Pencapaian Target Selesai</span>
+                  <span className="font-semibold text-foreground font-mono">
+                    {monthStats.hasil?.tercapaiPct ?? 0}% Selesai Tepat Waktu
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-muted rounded-full overflow-hidden flex">
+                  <div
+                    className="bg-emerald-500 h-full transition-all duration-500"
+                    style={{ width: `${monthStats.hasil?.tercapaiPct ?? 0}%` }}
+                  />
+                  <div
+                    className="bg-amber-500 h-full transition-all duration-500"
+                    style={{ width: `${monthStats.hasil?.tidakTercapaiPct ?? 0}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* TABEL KATEGORI DESAIN */}
+        <div className="lg:col-span-7 flex flex-col">
+          <div className="border border-border/80 rounded-xl overflow-hidden bg-card shadow-xs flex-1 flex flex-col">
+            <div className="border-b bg-muted/50 px-4 py-2.5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FolderKanban className="h-4 w-4 text-primary" />
+                <span className="font-bold text-sm text-foreground tracking-wide">
+                  Kategori Desain
+                </span>
+              </div>
+              {categoryFilter && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
+                  onClick={() => handleFilter("category", undefined)}
+                >
+                  Reset Filter Kategori
+                </Button>
+              )}
+            </div>
+
+            <div className="p-3.5 flex-1 flex flex-col justify-between">
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b text-muted-foreground">
+                      <th className="text-left font-medium pb-2 px-1.5">Kategori Desain</th>
+                      <th className="text-right font-medium pb-2 px-1.5">Jumlah Tiket</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    <tr
+                      onClick={() => toggleCategoryFilter("Design Cetak")}
+                      className={`cursor-pointer transition-colors group hover:bg-muted/50 ${
+                        categoryFilter === "Design Cetak"
+                          ? "bg-primary/15 font-semibold ring-1 ring-primary/40"
+                          : ""
+                      }`}
+                      title="Klik untuk memfilter tiket Design Cetak"
+                    >
+                      <td className="py-2 px-1.5 flex items-center gap-2">
+                        <Printer className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
+                        <span className="text-foreground group-hover:text-primary font-medium">
+                          Design Cetak
+                        </span>
+                        {categoryFilter === "Design Cetak" && (
+                          <Badge variant="outline" className="text-[10px] h-4 px-1 border-primary/40 text-primary">
+                            Aktif
+                          </Badge>
+                        )}
+                      </td>
+                      <td className="py-2 px-1.5 text-right font-semibold font-mono text-foreground text-sm">
+                        {monthStats.kategori?.designCetak ?? 0}
+                      </td>
+                    </tr>
+
+                    <tr
+                      onClick={() => toggleCategoryFilter("Design Digital")}
+                      className={`cursor-pointer transition-colors group hover:bg-muted/50 ${
+                        categoryFilter === "Design Digital"
+                          ? "bg-primary/15 font-semibold ring-1 ring-primary/40"
+                          : ""
+                      }`}
+                      title="Klik untuk memfilter tiket Design Digital"
+                    >
+                      <td className="py-2 px-1.5 flex items-center gap-2">
+                        <Monitor className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+                        <span className="text-foreground group-hover:text-primary font-medium">
+                          Design Digital
+                        </span>
+                        {categoryFilter === "Design Digital" && (
+                          <Badge variant="outline" className="text-[10px] h-4 px-1 border-primary/40 text-primary">
+                            Aktif
+                          </Badge>
+                        )}
+                      </td>
+                      <td className="py-2 px-1.5 text-right font-semibold font-mono text-foreground text-sm">
+                        {monthStats.kategori?.designDigital ?? 0}
+                      </td>
+                    </tr>
+
+                    <tr
+                      onClick={() => toggleCategoryFilter("Editing Foto")}
+                      className={`cursor-pointer transition-colors group hover:bg-muted/50 ${
+                        categoryFilter === "Editing Foto"
+                          ? "bg-primary/15 font-semibold ring-1 ring-primary/40"
+                          : ""
+                      }`}
+                      title="Klik untuk memfilter tiket Editing Foto"
+                    >
+                      <td className="py-2 px-1.5 flex items-center gap-2">
+                        <ImageIcon className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                        <span className="text-foreground group-hover:text-primary font-medium">
+                          Editing Foto
+                        </span>
+                        {categoryFilter === "Editing Foto" && (
+                          <Badge variant="outline" className="text-[10px] h-4 px-1 border-primary/40 text-primary">
+                            Aktif
+                          </Badge>
+                        )}
+                      </td>
+                      <td className="py-2 px-1.5 text-right font-semibold font-mono text-foreground text-sm">
+                        {monthStats.kategori?.editingFoto ?? 0}
+                      </td>
+                    </tr>
+
+                    <tr
+                      onClick={() => toggleCategoryFilter("Editing Video")}
+                      className={`cursor-pointer transition-colors group hover:bg-muted/50 ${
+                        categoryFilter === "Editing Video"
+                          ? "bg-primary/15 font-semibold ring-1 ring-primary/40"
+                          : ""
+                      }`}
+                      title="Klik untuk memfilter tiket Editing Video"
+                    >
+                      <td className="py-2 px-1.5 flex items-center gap-2">
+                        <Video className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+                        <span className="text-foreground group-hover:text-primary font-medium">
+                          Editing Video
+                        </span>
+                        {categoryFilter === "Editing Video" && (
+                          <Badge variant="outline" className="text-[10px] h-4 px-1 border-primary/40 text-primary">
+                            Aktif
+                          </Badge>
+                        )}
+                      </td>
+                      <td className="py-2 px-1.5 text-right font-semibold font-mono text-foreground text-sm">
+                        {monthStats.kategori?.editingVideo ?? 0}
+                      </td>
+                    </tr>
+
+                    {/* Total Tiket (Highlight Kuning #ffff00 Sesuai Format Excel) */}
+                    <tr
+                      onClick={() => handleFilter("category", undefined)}
+                      className="bg-[#ffff00] dark:bg-yellow-400 text-neutral-950 font-bold hover:opacity-90 cursor-pointer transition-opacity"
+                      title="Total Tiket - Klik untuk menghapus filter kategori"
+                    >
+                      <td className="py-2.5 px-2 font-bold text-neutral-950 text-xs sm:text-sm">
+                        Total tiket
+                      </td>
+                      <td className="py-2.5 px-2 text-right font-bold font-mono text-neutral-950 text-sm">
+                        {monthStats.kategori?.totalTiket ?? monthStats.total ?? 0}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. RINGKASAN STATUS BULANAN (METRIC KPI CARDS) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 mb-5">
         {/* Total Tiket */}
         <button
@@ -813,6 +1169,56 @@ export default function PermintaanList() {
             )}
           </div>
         </div>
+
+        {/* Active Filter Pills untuk Kategori atau Hasil */}
+        {(categoryFilter || hasilFilter) && (
+          <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-border/50">
+            <span className="text-xs text-muted-foreground font-medium">Filter Aktif:</span>
+            {categoryFilter && (
+              <Badge
+                variant="secondary"
+                className="text-xs flex items-center gap-1.5 py-1 px-2.5 bg-primary/10 text-primary border border-primary/30"
+              >
+                <span>Kategori: {categoryFilter}</span>
+                <button
+                  type="button"
+                  onClick={() => handleFilter("category", undefined)}
+                  className="hover:opacity-75 cursor-pointer"
+                  title="Hapus filter kategori"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
+            {hasilFilter && (
+              <Badge
+                variant="secondary"
+                className="text-xs flex items-center gap-1.5 py-1 px-2.5 bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30"
+              >
+                <span>Hasil: {hasilFilter}</span>
+                <button
+                  type="button"
+                  onClick={() => handleFilter("hasil", undefined)}
+                  className="hover:opacity-75 cursor-pointer"
+                  title="Hapus filter hasil"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                handleFilter("category", undefined);
+                handleFilter("hasil", undefined);
+              }}
+            >
+              Reset Filter Tambahan
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* 4. TABLE AREA (TABEL PER BULAN) */}
@@ -884,15 +1290,35 @@ export default function PermintaanList() {
                     )}
                   </TableCell>
 
-                  {/* Judul & Project */}
-                  <TableCell className="max-w-[280px]">
+                  {/* Judul, Project, Kategori & Hasil */}
+                  <TableCell className="max-w-[300px]">
                     <div className="font-semibold text-sm text-foreground line-clamp-1" title={item.judul}>
                       {item.judul}
                     </div>
-                    <div className="mt-1 flex items-center gap-1.5">
-                      <Badge variant="outline" className="text-[11px] px-1.5 py-0 font-normal">
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
                         {item.project || "Design"}
                       </Badge>
+                      {item.category && (
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] px-1.5 py-0 font-normal bg-muted text-muted-foreground"
+                        >
+                          {item.category}
+                        </Badge>
+                      )}
+                      {item.hasil_label && (
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] px-1.5 py-0 font-normal ${
+                            item.is_tercapai
+                              ? "border-emerald-500/30 text-emerald-600 bg-emerald-500/10 dark:text-emerald-400"
+                              : "border-amber-500/30 text-amber-600 bg-amber-500/10 dark:text-amber-400"
+                          }`}
+                        >
+                          {item.hasil_label}
+                        </Badge>
+                      )}
                     </div>
                   </TableCell>
 

@@ -42,6 +42,105 @@ const cleanDeskripsi = (desc: string) => {
     .trim();
 };
 
+export type DesignCategory = "Design Cetak" | "Design Digital" | "Editing Foto" | "Editing Video";
+
+export function getDesignCategory(project: string): DesignCategory {
+  const p = (project || "").toLowerCase();
+
+  // 1. Editing Video
+  if (
+    p.includes("video") ||
+    p.includes("vidio") ||
+    p.includes("animasi") ||
+    p.includes("motion") ||
+    p.includes("reels") ||
+    p.includes("tiktok")
+  ) {
+    return "Editing Video";
+  }
+
+  // 2. Editing Foto
+  if (
+    p.includes("photo") ||
+    p.includes("foto") ||
+    p.includes("retouch") ||
+    p.includes("dokumentasi")
+  ) {
+    return "Editing Foto";
+  }
+
+  // 3. Design Cetak
+  if (
+    p.includes("cetak") ||
+    p.includes("print") ||
+    p.includes("brosur") ||
+    p.includes("sertifikat") ||
+    p.includes("kemasan") ||
+    p.includes("catalog") ||
+    p.includes("katalog") ||
+    p.includes("label") ||
+    p.includes("stiker") ||
+    p.includes("sticker") ||
+    p.includes("kartu nama") ||
+    p.includes("buku") ||
+    p.includes("tagging") ||
+    p.includes("merchandise") ||
+    p.includes("banner") ||
+    p.includes("spanduk") ||
+    p.includes("backdrop")
+  ) {
+    return "Design Cetak";
+  }
+
+  // 4. Design Digital (Poster, Flyer, File Presentasi, Template, Medsos, dll)
+  return "Design Digital";
+}
+
+export function checkIsTicketTercapai(ticket: {
+  status: string;
+  created_at: string;
+  due_date: string;
+  updated_at?: string;
+  deskripsi?: string;
+}): boolean {
+  const status = (ticket.status || "").toUpperCase();
+
+  // Jika tiket belum selesai (bukan DONE), belum tercapai
+  if (status !== "DONE") {
+    return false;
+  }
+
+  if (!ticket.due_date) return true;
+
+  const dueStr = (ticket.due_date || "").slice(0, 10);
+  const createdStr = (ticket.created_at || "").slice(0, 10);
+  const updatedStr = (ticket.updated_at || "").slice(0, 10);
+
+  // 1. Jika updated_at <= dueStr, pasti tepat waktu / tercapai
+  if (updatedStr && updatedStr <= dueStr) {
+    return true;
+  }
+
+  // 2. Jika dibuat sebelum/pada due date dan ada info durasi pengerjaan di deskripsi
+  const desc = ticket.deskripsi || "";
+  if (createdStr <= dueStr && desc.toLowerCase().includes("durasi pengerjaan")) {
+    return true;
+  }
+
+  // 3. Toleransi timezone: Supabase menyimpan UTC, sehingga jam 23:00 UTC = jam 06:00 WIB hari berikutnya (+1 hari)
+  if (createdStr <= dueStr && updatedStr) {
+    const dueDate = new Date(dueStr).getTime();
+    const updateDate = new Date(updatedStr).getTime();
+    const diffDays = (updateDate - dueDate) / (1000 * 60 * 60 * 24);
+    if (diffDays <= 1) {
+      return true;
+    }
+  }
+
+  // 4. Default: jika dibuat pada tanggal deadline atau sebelumnya dan status sudah DONE
+  return createdStr <= dueStr;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = getAdminClient();
@@ -114,6 +213,9 @@ export async function GET(request: NextRequest) {
     const month = searchParams.get("month") || "";
     const all = searchParams.get("all") === "true"; // For Excel export
 
+    const category = searchParams.get("category") || "";
+    const hasil = searchParams.get("hasil") || "";
+
     let query = supabase.from("permintaan").select("*", { count: "exact" });
 
     // Apply Search
@@ -157,7 +259,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Calculate Monthly Stats (without pagination)
-    let statsQuery = supabase.from("permintaan").select("status");
+    let statsQuery = supabase
+      .from("permintaan")
+      .select("id, status, project, created_at, due_date, updated_at, deskripsi");
+
     if (month && month !== "all") {
       const [yStr, mStr] = month.split("-");
       const y = parseInt(yStr, 10);
@@ -184,7 +289,21 @@ export async function GET(request: NextRequest) {
       review: 0,
       revision: 0,
       done: 0,
+      hasil: {
+        tercapai: 0,
+        tercapaiPct: 0,
+        tidakTercapai: 0,
+        tidakTercapaiPct: 0,
+      },
+      kategori: {
+        designCetak: 0,
+        designDigital: 0,
+        editingFoto: 0,
+        editingVideo: 0,
+        totalTiket: 0,
+      },
     };
+
     statsData?.forEach((row: any) => {
       const s = (row.status || "").toUpperCase();
       if (s === "DONE") stats.done++;
@@ -192,13 +311,35 @@ export async function GET(request: NextRequest) {
       else if (s === "REVIEW") stats.review++;
       else if (s === "REVISION") stats.revision++;
       else if (s === "TO DO" || s === "TODO") stats.todo++;
+
+      // Kategori Desain
+      const cat = getDesignCategory(row.project || "");
+      if (cat === "Design Cetak") stats.kategori.designCetak++;
+      else if (cat === "Design Digital") stats.kategori.designDigital++;
+      else if (cat === "Editing Foto") stats.kategori.editingFoto++;
+      else if (cat === "Editing Video") stats.kategori.editingVideo++;
+
+      // Hasil (Tercapai vs Tidak Tercapai)
+      const isTercapai = checkIsTicketTercapai(row);
+      if (isTercapai) stats.hasil.tercapai++;
+      else stats.hasil.tidakTercapai++;
     });
+
+    const totalCalculated = stats.total || (stats.hasil.tercapai + stats.hasil.tidakTercapai) || 0;
+    stats.kategori.totalTiket = totalCalculated;
+
+    if (totalCalculated > 0) {
+      stats.hasil.tercapaiPct = Math.round((stats.hasil.tercapai / totalCalculated) * 100);
+      stats.hasil.tidakTercapaiPct = 100 - stats.hasil.tercapaiPct;
+    }
 
     // Order
     query = query.order("created_at", { ascending: false });
 
-    // Pagination
-    if (!all) {
+    // Jika filter spesifik category atau hasil aktif, ambil seluruhnya lalu filter dan paginasi
+    const requiresMemoryFilter = Boolean((category && category !== "all") || (hasil && hasil !== "all"));
+
+    if (!all && !requiresMemoryFilter) {
       const from = (page - 1) * limit;
       const to = from + limit - 1;
       query = query.range(from, to);
@@ -211,7 +352,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Map Names for requester and admin
-    const items = data || [];
+    let items = data || [];
     const userIds = new Set<string>();
     items.forEach((item) => {
       if (item.requester) userIds.add(item.requester);
@@ -230,12 +371,15 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const formattedData = items.map((item) => {
+    let formattedData = items.map((item) => {
       let adminName = item.admin ? nameMap[item.admin] : "-";
       if (!adminName || adminName === "-") {
         if (item.admin === FAREL_ID) adminName = "Farel Ramadhan";
         else if (item.admin === PAULUS_ID) adminName = "Paulus Sianipar";
       }
+
+      const cat = getDesignCategory(item.project || "");
+      const isTercapai = checkIsTicketTercapai(item);
 
       return {
         ...item,
@@ -243,12 +387,34 @@ export async function GET(request: NextRequest) {
         deskripsi: cleanDeskripsi(item.deskripsi),
         requester_name: item.requester ? nameMap[item.requester] || "Pelapor" : "Pelapor",
         admin_name: adminName || "-",
+        category: cat,
+        is_tercapai: isTercapai,
+        hasil_label: isTercapai ? "Tercapai" : "Tidak Tercapai",
       };
     });
 
+    // Terapkan filter category atau hasil jika dipilih
+    if (category && category !== "all") {
+      formattedData = formattedData.filter((item) => item.category === category);
+    }
+    if (hasil && hasil !== "all") {
+      const wantTercapai = hasil.toLowerCase().includes("tercapai") && !hasil.toLowerCase().includes("tidak");
+      formattedData = formattedData.filter((item) => item.is_tercapai === wantTercapai);
+    }
+
+    const filteredTotal = requiresMemoryFilter ? formattedData.length : (count || 0);
+
+    // Lakukan pagination jika memory filter aktif
+    let finalPageData = formattedData;
+    if (!all && requiresMemoryFilter) {
+      const from = (page - 1) * limit;
+      const to = from + limit;
+      finalPageData = formattedData.slice(from, to);
+    }
+
     return NextResponse.json({
-      data: formattedData,
-      total: count || 0,
+      data: finalPageData,
+      total: filteredTotal,
       stats,
       page,
       limit,
