@@ -46,6 +46,7 @@ import {
   Video,
   TrendingUp,
   X,
+  Upload,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -58,6 +59,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   useEffect,
@@ -65,6 +74,7 @@ import {
   useCallback,
   useTransition,
   useMemo,
+  useRef,
 } from "react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
@@ -184,6 +194,16 @@ export default function PermintaanList() {
     revision: 0,
     done: 0,
   });
+
+  // State Import File
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isReadingFile, setIsReadingFile] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isProcessingImport, setIsProcessingImport] = useState(false);
+  const [importFileName, setImportFileName] = useState("");
+  const [importPreviewRows, setImportPreviewRows] = useState<any[]>([]);
+  const [targetImportMonth, setTargetImportMonth] = useState<string>(getCurrentMonthPeriod());
+  const [importMode, setImportMode] = useState<"append" | "replace_month">("append");
 
   // Filter Params - Defaults to current month period
   const currentMonth = getCurrentMonthPeriod();
@@ -473,7 +493,234 @@ export default function PermintaanList() {
     }
   };
 
-  // 6. Hapus Permintaan (Khusus Admin via API)
+  // Helper parser tanggal sel Excel
+  const parseCellDate = (val: any, timeVal?: any): string => {
+    if (!val) return new Date().toISOString();
+
+    if (typeof val === "number") {
+      const utcDays = Math.floor(val - 25569);
+      const utcValue = utcDays * 86400;
+      const dateInfo = new Date(utcValue * 1000);
+      const y = dateInfo.getFullYear();
+      const m = String(dateInfo.getMonth() + 1).padStart(2, "0");
+      const d = String(dateInfo.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}T08:00:00.000Z`;
+    }
+
+    const s = String(val).trim();
+    const dmYMatch = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+    if (dmYMatch) {
+      const d = dmYMatch[1].padStart(2, "0");
+      const m = dmYMatch[2].padStart(2, "0");
+      const y = dmYMatch[3];
+      let time = "08:00:00";
+      if (timeVal && String(timeVal).trim()) {
+        const tStr = String(timeVal).trim();
+        if (tStr.length === 5) time = `${tStr}:00`;
+        else if (tStr.length === 8) time = tStr;
+      }
+      return `${y}-${m}-${d}T${time}.000Z`;
+    }
+
+    const ymdMatch = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (ymdMatch) {
+      const y = ymdMatch[1];
+      const m = ymdMatch[2].padStart(2, "0");
+      const d = ymdMatch[3].padStart(2, "0");
+      return `${y}-${m}-${d}T08:00:00.000Z`;
+    }
+
+    const parsed = new Date(s);
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toISOString();
+    }
+
+    return new Date().toISOString();
+  };
+
+  // 6. Handler Import File (Excel / CSV)
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setIsReadingFile(true);
+    setImportFileName(file.name);
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+
+      let targetSheet = workbook.Sheets[workbook.SheetNames[0]];
+      for (const name of workbook.SheetNames) {
+        const n = name.toLowerCase();
+        if (n.includes("tiket") || n.includes("daftar") || n.includes("permintaan") || n.includes("worksheet")) {
+          targetSheet = workbook.Sheets[name];
+          break;
+        }
+      }
+
+      const rows = XLSX.utils.sheet_to_json<any[]>(targetSheet, { header: 1, defval: "", raw: true });
+      if (!rows || rows.length < 2) {
+        throw new Error("File kosong atau tidak memiliki baris data yang cukup.");
+      }
+
+      const normalize = (v: any) =>
+        String(v ?? "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+
+      let headerIndex = -1;
+      for (let r = 0; r < Math.min(rows.length, 15); r++) {
+        const cells = rows[r].map(normalize);
+        if (
+          (cells.includes("kode tiket") && cells.includes("pelapor")) ||
+          (cells.includes("judul permintaan") || cells.includes("judul")) ||
+          (cells.includes("unit perangkat") && cells.includes("kendala masalah")) ||
+          (cells.includes("task description") && cells.includes("name")) ||
+          (cells.includes("nama") && cells.includes("status")) ||
+          (cells.includes("project") && cells.includes("status"))
+        ) {
+          headerIndex = r;
+          break;
+        }
+      }
+
+      if (headerIndex === -1) headerIndex = 0;
+
+      const normHeaders = rows[headerIndex].map(normalize);
+      const findCol = (...keywords: string[]) => {
+        return normHeaders.findIndex((h: string) =>
+          keywords.some((kw) => h === kw || h.includes(kw))
+        );
+      };
+
+      const colJudul = findCol("judul permintaan", "judul", "title", "unit perangkat", "unit", "task description", "task", "pekerjaan");
+      const colProject = findCol("jenis proyek", "project", "proyek", "kategori desain");
+      const colDept = findCol("departemen divisi", "departemen", "divisi", "department", "lokasi");
+      const colPelapor = findCol("peminta pelapor", "peminta", "pelapor", "requester", "name", "nama");
+      const colDesainer = findCol("desainer", "teknisi", "admin", "pic", "designer");
+      const colStatus = findCol("status", "keadaan");
+      const colDueDate = findCol("target selesai due date", "target selesai", "due date", "tgl selesai", "tanggal selesai");
+      const colCreatedAt = findCol("tanggal dibuat", "tgl buat", "tanggal pengajuan", "created at", "activity date", "tanggal", "date");
+      const colJamBuat = findCol("jam buat", "time");
+      const colJamSelesai = findCol("jam selesai");
+      const colDesc = findCol("deskripsi kendala", "deskripsi", "kendala masalah", "kendala", "description", "keterangan");
+      const colSolusi = findCol("solusi catatan", "solusi", "catatan", "remarks");
+      const colDurasi = findCol("durasi pengerjaan", "durasi");
+
+      const parsed: any[] = [];
+      const monthCounts = new Map<string, number>();
+
+      for (let r = headerIndex + 1; r < rows.length; r++) {
+        const row = rows[r];
+        if (!row || row.every((c: any) => c === null || c === undefined || String(c).trim() === "")) continue;
+
+        let judul = colJudul >= 0 ? String(row[colJudul] || "").trim() : "";
+        const desc = colDesc >= 0 ? String(row[colDesc] || "").trim() : "";
+
+        if (!judul && desc) {
+          judul = desc.split("\n")[0].slice(0, 80);
+        }
+        if (!judul) continue;
+
+        const pelapor = colPelapor >= 0 ? String(row[colPelapor] || "").trim() : "Pelapor";
+        const desainer = colDesainer >= 0 ? String(row[colDesainer] || "").trim() : "Paulus Sianipar";
+        const dept = colDept >= 0 ? String(row[colDept] || "").trim() : "Umum";
+        const rawStatus = colStatus >= 0 ? String(row[colStatus] || "").trim() : "DONE";
+        const project = colProject >= 0 && row[colProject] ? String(row[colProject]).trim() : "";
+        const solusi = colSolusi >= 0 ? String(row[colSolusi] || "").trim() : "";
+        const durasi = colDurasi >= 0 ? String(row[colDurasi] || "").trim() : "";
+
+        const createdAt = parseCellDate(row[colCreatedAt], colJamBuat >= 0 ? row[colJamBuat] : null);
+        const dueDate = colDueDate >= 0 ? parseCellDate(row[colDueDate], colJamSelesai >= 0 ? row[colJamSelesai] : null) : createdAt;
+
+        const mPeriod = createdAt.slice(0, 7);
+        monthCounts.set(mPeriod, (monthCounts.get(mPeriod) || 0) + 1);
+
+        parsed.push({
+          id: crypto.randomUUID(),
+          judul,
+          deskripsi: desc,
+          solusi,
+          durasi_pengerjaan: durasi,
+          pelapor,
+          requester_name: pelapor,
+          departemen: dept,
+          admin_name: desainer,
+          status: rawStatus,
+          project,
+          created_at: createdAt,
+          due_date: dueDate,
+        });
+      }
+
+      if (parsed.length === 0) {
+        throw new Error("Tidak ada baris tiket yang valid ditemukan di dalam file ini.");
+      }
+
+      let detectedMonth = selectedMonth !== "all" ? selectedMonth : currentMonth;
+      let maxMonthCount = 0;
+      monthCounts.forEach((count, month) => {
+        if (count > maxMonthCount) {
+          maxMonthCount = count;
+          detectedMonth = month;
+        }
+      });
+
+      setImportPreviewRows(parsed);
+      setTargetImportMonth(detectedMonth);
+      setImportMode("append");
+      setIsImportModalOpen(true);
+      toast.info(`File berhasil dibaca: ${parsed.length} tiket terdeteksi.`);
+    } catch (err: any) {
+      console.error("Gagal membaca file:", err);
+      toast.error("Gagal membaca file: " + err.message);
+    } finally {
+      setIsReadingFile(false);
+    }
+  };
+
+  const handleConfirmImport = async () => {
+    if (importPreviewRows.length === 0) return;
+    setIsProcessingImport(true);
+
+    try {
+      const res = await fetch("/api/permintaan/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: importPreviewRows,
+          mode: importMode,
+          targetMonth: targetImportMonth,
+        }),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => null);
+        throw new Error(errJson?.error || `HTTP error ${res.status}`);
+      }
+
+      const result = await res.json();
+      toast.success(result.message || `Berhasil mengimpor ${result.count || importPreviewRows.length} tiket.`);
+      setIsImportModalOpen(false);
+
+      if (selectedMonth !== targetImportMonth && targetImportMonth) {
+        handleFilter("month", targetImportMonth);
+      } else {
+        fetchData();
+      }
+    } catch (err: any) {
+      console.error("Error import:", err);
+      toast.error("Gagal memproses import: " + err.message);
+    } finally {
+      setIsProcessingImport(false);
+    }
+  };
+
+  // 7. Hapus Permintaan (Khusus Admin via API)
   const handleDeletePermintaan = async () => {
     if (!deletingPermintaan) return;
     setIsDeleting(true);
@@ -576,6 +823,29 @@ export default function PermintaanList() {
             </span>
             {isRealtimeConnected ? "Live Real-time" : "Connecting..."}
           </Badge>
+
+          {/* Import File Excel / CSV */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileSelect}
+            accept=".xlsx,.xls,.csv"
+            className="hidden"
+          />
+          <Button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isReadingFile || isProcessingImport}
+            variant="outline"
+            className="flex items-center gap-1.5 border-primary/30 text-primary hover:bg-primary/10 transition-colors"
+            title="Import tiket dari file Excel (.xlsx, .xls) atau CSV"
+          >
+            {isReadingFile ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="h-4 w-4" />
+            )}
+            <span>Import File</span>
+          </Button>
 
           {/* Export Excel (Untuk SEMUA Role Sesuai Bulan) */}
           <Button
@@ -1449,6 +1719,156 @@ export default function PermintaanList() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* MODAL DIALOG: PREVIEW & KONFIRMASI IMPORT FILE */}
+      <Dialog open={isImportModalOpen} onOpenChange={setIsImportModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Upload className="h-5 w-5 text-primary" />
+              <span>Konfirmasi Import Permintaan Desain</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              File: <span className="font-semibold text-foreground">{importFileName}</span> &bull; Terdeteksi{" "}
+              <span className="font-semibold text-foreground">{importPreviewRows.length} tiket</span>
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Banner Integrasi ke Daily Activity & KPI */}
+          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3 text-xs text-emerald-800 dark:text-emerald-300 flex items-start gap-2.5">
+            <Sparkles className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold">Sinkronisasi Otomatis Terintegrasi</p>
+              <p className="text-[11px] text-emerald-700/90 dark:text-emerald-300/90 mt-0.5">
+                Data tiket yang diimpor akan otomatis masuk ke daftar tiket <strong>Permintaan Desain</strong>, tercatat ke <strong>Daily Activity</strong>, serta langsung dihitung dalam metrik <strong>KPI Balanced Scorecard</strong>.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            {/* Target Periode Bulan */}
+            <div className="space-y-1.5">
+              <label className="font-medium text-foreground">Target Periode Bulan</label>
+              <Select value={targetImportMonth} onValueChange={setTargetImportMonth}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="Pilih Bulan" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[220px]">
+                  {MONTH_OPTIONS.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Mode Import */}
+            <div className="space-y-1.5">
+              <label className="font-medium text-foreground">Metode Penyimpanan</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setImportMode("append")}
+                  className={`p-2 rounded-lg border text-left transition-all ${
+                    importMode === "append"
+                      ? "border-primary bg-primary/10 text-primary font-medium"
+                      : "border-border text-muted-foreground hover:bg-muted/40"
+                  }`}
+                >
+                  <div className="font-semibold text-xs">Tambah Data</div>
+                  <div className="text-[10px] text-muted-foreground mt-0.5">Gabungkan dengan data yang ada</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImportMode("replace_month")}
+                  className={`p-2 rounded-lg border text-left transition-all ${
+                    importMode === "replace_month"
+                      ? "border-rose-500 bg-rose-500/10 text-rose-700 dark:text-rose-400 font-medium"
+                      : "border-border text-muted-foreground hover:bg-muted/40"
+                  }`}
+                >
+                  <div className="font-semibold text-xs">Timpa Bulan Ini</div>
+                  <div className="text-[10px] text-muted-foreground mt-0.5">Hapus data lama di bulan {targetImportMonth}</div>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Tabel Preview (First 6 Rows) */}
+          <div className="flex-1 overflow-auto border rounded-lg max-h-[220px]">
+            <table className="w-full text-xs border-collapse">
+              <thead className="bg-muted/60 sticky top-0 border-b">
+                <tr className="text-left text-[11px] text-muted-foreground">
+                  <th className="py-1.5 px-2">No</th>
+                  <th className="py-1.5 px-2">Tanggal</th>
+                  <th className="py-1.5 px-2">Judul Permintaan</th>
+                  <th className="py-1.5 px-2">Peminta</th>
+                  <th className="py-1.5 px-2">Desainer</th>
+                  <th className="py-1.5 px-2">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/50">
+                {importPreviewRows.slice(0, 6).map((item, idx) => (
+                  <tr key={idx} className="hover:bg-muted/30">
+                    <td className="py-1.5 px-2 text-muted-foreground font-mono">{idx + 1}</td>
+                    <td className="py-1.5 px-2 font-mono whitespace-nowrap">
+                      {item.created_at?.slice(0, 10)}
+                    </td>
+                    <td className="py-1.5 px-2 max-w-[200px] truncate font-medium text-foreground" title={item.judul}>
+                      {item.judul}
+                    </td>
+                    <td className="py-1.5 px-2 text-muted-foreground truncate max-w-[120px]">{item.pelapor}</td>
+                    <td className="py-1.5 px-2 text-muted-foreground">{item.admin_name}</td>
+                    <td className="py-1.5 px-2">
+                      <Badge variant="outline" className="text-[10px] px-1 py-0">
+                        {item.status}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {importPreviewRows.length > 6 && (
+            <p className="text-[11px] text-muted-foreground text-center">
+              ... dan {importPreviewRows.length - 6} baris tiket lainnya akan diproses.
+            </p>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0 mt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsImportModalOpen(false)}
+              disabled={isProcessingImport}
+            >
+              Batal
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleConfirmImport}
+              disabled={isProcessingImport}
+              className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+            >
+              {isProcessingImport ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Mengimpor & Menyinkronkan...</span>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>Konfirmasi & Import ({importPreviewRows.length} Tiket)</span>
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* FOOTER & PAGINATION */}
       <div className="mt-4 flex flex-col md:flex-row justify-between items-center gap-4">

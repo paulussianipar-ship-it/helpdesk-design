@@ -33,9 +33,15 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false });
 
     if (month && month !== "all") {
-      query = query
-        .gte("activity_date", `${month}-01`)
-        .lte("activity_date", `${month}-31`);
+      const [yStr, mStr] = month.split("-");
+      const y = parseInt(yStr, 10);
+      const m = parseInt(mStr, 10);
+      if (!isNaN(y) && !isNaN(m)) {
+        const lastDay = new Date(y, m, 0).getDate();
+        query = query
+          .gte("activity_date", `${month}-01`)
+          .lte("activity_date", `${month}-${String(lastDay).padStart(2, "0")}`);
+      }
     }
 
     if (staff && staff !== "all") {
