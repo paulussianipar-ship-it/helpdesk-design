@@ -81,6 +81,7 @@ import {
   formatMonthYearIndo,
   getDayNameIndo,
   getDaysInMonth,
+  getAllStbHseSeedData,
   isWeekend,
 } from "@/lib/stb-hse-seed";
 
@@ -159,6 +160,9 @@ export default function StbHsePage() {
     setLoading(true);
     let loadedFromDb = false;
 
+    // Seed data lengkap 12 bulan sebagai fallback
+    const fullYearSeed = getAllStbHseSeedData(selectedYear);
+
     try {
       const { data, error } = await supabase
         .from("stb_hse_roster")
@@ -196,18 +200,31 @@ export default function StbHsePage() {
         try {
           const parsed = JSON.parse(cached);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setRecords(parsed);
+            // Pastikan semua 12 bulan tersedia — tambahkan bulan yang belum ada dari seed
+            const existingPeriods = new Set(parsed.map((r: StbHseRosterRecord) => r.period_month));
+            const missingSeedRecords = fullYearSeed.filter(
+              (r) => !existingPeriods.has(r.period_month)
+            );
+            const merged = missingSeedRecords.length > 0
+              ? [...parsed, ...missingSeedRecords]
+              : parsed;
+            setRecords(merged);
+            if (missingSeedRecords.length > 0) {
+              localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(merged));
+            }
           } else {
-            setRecords(INITIAL_STB_HSE_DATA);
-            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(INITIAL_STB_HSE_DATA));
+            // localStorage kosong — isi dengan seed lengkap 12 bulan
+            setRecords(fullYearSeed);
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(fullYearSeed));
           }
         } catch {
-          setRecords(INITIAL_STB_HSE_DATA);
-          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(INITIAL_STB_HSE_DATA));
+          setRecords(fullYearSeed);
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(fullYearSeed));
         }
       } else {
-        setRecords(INITIAL_STB_HSE_DATA);
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(INITIAL_STB_HSE_DATA));
+        // Tidak ada localStorage — isi dengan seed lengkap 12 bulan
+        setRecords(fullYearSeed);
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(fullYearSeed));
       }
     }
 
