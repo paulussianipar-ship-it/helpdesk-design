@@ -153,41 +153,41 @@ export function RekapBulananPage() {
   const currentSlaData = useMemo(() => {
     if (!rekap) {
       return {
-        totalMasuk: 472,
-        totalSelesai: 464,
-        slaAchievement: 74.4,
-        slaGrade: "Cukup Baik",
-        eligibleTickets: 464,
+        totalMasuk: 0,
+        totalSelesai: 0,
+        slaAchievement: 100,
+        slaGrade: "Sangat Baik",
+        eligibleTickets: 0,
         vendorExcluded: 0,
-        avgDuration: 18.8,
-        escalationCount: 6,
-        escalationPct: 1.3,
+        avgDuration: 0,
+        escalationCount: 0,
+        escalationPct: 0,
         priority: {
-          p1: { pct: 57.1, done: 4, total: 7 },
-          p2: { pct: 33.3, done: 3, total: 9 },
-          p3: { pct: 70.8, done: 150, total: 212 },
-          p4: { pct: 79.7, done: 188, total: 236 },
+          p1: { pct: null, done: 0, total: 0 },
+          p2: { pct: null, done: 0, total: 0 },
+          p3: { pct: null, done: 0, total: 0 },
+          p4: { pct: null, done: 0, total: 0 },
         },
       };
     }
 
     if (selectedMonth === "all") {
       const p = rekap.totals.priorityOverall || {
-        p1: { pct: 57.1, done: 4, total: 7 },
-        p2: { pct: 33.3, done: 3, total: 9 },
-        p3: { pct: 70.8, done: 150, total: 212 },
-        p4: { pct: 79.7, done: 188, total: 236 },
+        p1: { pct: null, done: 0, total: 0 },
+        p2: { pct: null, done: 0, total: 0 },
+        p3: { pct: null, done: 0, total: 0 },
+        p4: { pct: null, done: 0, total: 0 },
       };
       return {
-        totalMasuk: rekap.totals.permintaanMasuk ?? 472,
-        totalSelesai: rekap.totals.permintaanSelesai ?? 464,
-        slaAchievement: rekap.totals.slaAchievementYtd ?? rekap.totals.permintaanSlaPct ?? 74.4,
-        slaGrade: rekap.totals.slaGradeYtd || "Cukup Baik",
-        eligibleTickets: rekap.totals.eligibleTickets ?? rekap.totals.permintaanSelesai ?? 464,
+        totalMasuk: rekap.totals.permintaanMasuk ?? 0,
+        totalSelesai: rekap.totals.permintaanSelesai ?? 0,
+        slaAchievement: rekap.totals.slaAchievementYtd ?? rekap.totals.permintaanSlaPct ?? 100,
+        slaGrade: rekap.totals.slaGradeYtd || rekap.totals.overallKpiGrade || "Baik",
+        eligibleTickets: rekap.totals.eligibleTickets ?? rekap.totals.permintaanSelesai ?? 0,
         vendorExcluded: rekap.totals.vendorExcluded ?? 0,
-        avgDuration: rekap.totals.permintaanAvgHours ?? 18.8,
-        escalationCount: rekap.totals.escalationCount ?? rekap.totals.permintaanEskalasi ?? 6,
-        escalationPct: rekap.totals.escalationPct ?? 1.3,
+        avgDuration: rekap.totals.permintaanAvgHours ?? 0,
+        escalationCount: rekap.totals.escalationCount ?? rekap.totals.permintaanEskalasi ?? 0,
+        escalationPct: rekap.totals.escalationPct ?? 0,
         priority: p,
       };
     }
@@ -274,6 +274,59 @@ export function RekapBulananPage() {
       </div>
     );
   }
+
+  const highlightTotals = useMemo(() => {
+    if (!rekap) return null;
+    if (selectedMonth === "all") {
+      return {
+        permintaanMasuk: rekap.totals.permintaanMasuk ?? 0,
+        permintaanSelesai: rekap.totals.permintaanSelesai ?? 0,
+        permintaanSlaPct: rekap.totals.permintaanSlaPct ?? 0,
+        dailyTotal: rekap.totals.dailyTotal ?? 0,
+        dailyDone: rekap.totals.dailyDone ?? 0,
+        dailyRate: rekap.totals.dailyRate ?? 0,
+        attendancePrs: rekap.totals.attendancePrs ?? 0,
+        attendanceOvt: rekap.totals.attendanceOvt ?? 0,
+        attendanceRate: rekap.totals.attendanceRate ?? 0,
+        stbTotalStandby: rekap.totals.stbTotalStandby ?? 0,
+        stbCountH: rekap.totals.stbCountH ?? 0,
+        stbCountHSmall: rekap.totals.stbCountHSmall ?? 0,
+      };
+    }
+
+    const m = rekap.months.find((item) => item.monthNum === selectedMonth);
+    if (!m) {
+      return {
+        permintaanMasuk: 0,
+        permintaanSelesai: 0,
+        permintaanSlaPct: 0,
+        dailyTotal: 0,
+        dailyDone: 0,
+        dailyRate: 0,
+        attendancePrs: 0,
+        attendanceOvt: 0,
+        attendanceRate: 0,
+        stbTotalStandby: 0,
+        stbCountH: 0,
+        stbCountHSmall: 0,
+      };
+    }
+
+    return {
+      permintaanMasuk: m.permintaan.masuk,
+      permintaanSelesai: m.permintaan.selesai,
+      permintaanSlaPct: m.permintaan.masuk > 0 ? (m.permintaan.slaPct ?? 0) : 0,
+      dailyTotal: m.daily.total,
+      dailyDone: m.daily.done,
+      dailyRate: m.daily.total > 0 ? (m.daily.completionRate ?? 0) : 0,
+      attendancePrs: m.attendance.prs,
+      attendanceOvt: m.attendance.ovt,
+      attendanceRate: m.attendance.attendanceRate ?? 0,
+      stbTotalStandby: m.stb.totalStandby,
+      stbCountH: m.stb.countH,
+      stbCountHSmall: m.stb.countHSmall,
+    };
+  }, [rekap, selectedMonth]);
 
   const totals = rekap.totals;
 
@@ -617,10 +670,10 @@ export function RekapBulananPage() {
             <BarChart3 className="size-3.5 text-blue-500" />
           </div>
           <div className="text-2xl font-bold text-foreground mt-1">
-            {totals.permintaanResRate}%
+            {highlightTotals?.permintaanSlaPct ?? 0}%
           </div>
           <div className="text-[11px] text-muted-foreground mt-0.5">
-            {totals.permintaanSelesai} selesai dari {totals.permintaanMasuk} tiket
+            {highlightTotals?.permintaanSelesai ?? 0} selesai ({highlightTotals?.permintaanSlaPct ?? 0}% SLA tepat waktu)
           </div>
         </div>
 
@@ -631,10 +684,10 @@ export function RekapBulananPage() {
             <Layers className="size-3.5 text-emerald-500" />
           </div>
           <div className="text-2xl font-bold text-foreground mt-1">
-            {totals.dailyRate}%
+            {highlightTotals?.dailyRate ?? 0}%
           </div>
           <div className="text-[11px] text-muted-foreground mt-0.5">
-            {totals.dailyDone} tuntas dari {totals.dailyTotal} tugas
+            {highlightTotals?.dailyDone ?? 0} tuntas dari {highlightTotals?.dailyTotal ?? 0} tugas
           </div>
         </div>
 
@@ -645,10 +698,10 @@ export function RekapBulananPage() {
             <UserCheck className="size-3.5 text-purple-500" />
           </div>
           <div className="text-2xl font-bold text-foreground mt-1">
-            {totals.attendanceRate}%
+            {highlightTotals?.attendanceRate ?? 0}%
           </div>
           <div className="text-[11px] text-muted-foreground mt-0.5">
-            {totals.attendancePrs} Hadir (PRS) · {totals.attendanceOvt} Hari Lembur
+            {highlightTotals?.attendancePrs ?? 0} Hadir (PRS) · {highlightTotals?.attendanceOvt ?? 0} Hari Lembur
           </div>
         </div>
 
@@ -659,10 +712,10 @@ export function RekapBulananPage() {
             <Users className="size-3.5 text-indigo-500" />
           </div>
           <div className="text-2xl font-bold text-foreground mt-1">
-            {totals.stbTotalStandby}
+            {highlightTotals?.stbTotalStandby ?? 0}
           </div>
           <div className="text-[11px] text-muted-foreground mt-0.5">
-            {totals.stbCountH} Siang (H) · {totals.stbCountHSmall} Malam (h)
+            {highlightTotals?.stbCountH ?? 0} Siang (H) · {highlightTotals?.stbCountHSmall ?? 0} Malam (h)
           </div>
         </div>
       </div>

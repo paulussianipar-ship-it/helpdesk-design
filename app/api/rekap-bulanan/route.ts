@@ -8,7 +8,6 @@ import {
   calculatePersonStats,
   type StbHseRosterRecord,
 } from "@/lib/stb-hse-seed";
-import { INITIAL_REKAP_DATA_2026 } from "@/lib/rekap-tiket-data";
 
 export const dynamic = "force-dynamic";
 
@@ -125,10 +124,7 @@ export async function GET(request: NextRequest) {
     }
 
     // ============================================================
-    // PERMINTAAN DESAIN: Bangun map per bulan dari data Supabase,
-    // dengan WIB timezone correction (+7 jam dari UTC).
-    // Jika tahun 2026 dan data Supabase tidak mencukupi untuk suatu
-    // bulan, gunakan INITIAL_REKAP_DATA_2026 sebagai sumber terpercaya.
+    // PERMINTAAN DESAIN: Kelompokkan tiket Supabase per bulan (WIB-aware)
     // ============================================================
     interface PermintaanMonthData {
       masuk: number;
@@ -139,15 +135,19 @@ export async function GET(request: NextRequest) {
       avgDurationHours: number | null;
       eskalasi: number;
       statuses: Record<string, number>;
+      priorityBreakdown: {
+        p1: { pct: number | null; done: number; total: number };
+        p2: { pct: number | null; done: number; total: number };
+        p3: { pct: number | null; done: number; total: number };
+        p4: { pct: number | null; done: number; total: number };
+      };
     }
 
     const permintaanByMonth = new Map<string, PermintaanMonthData>();
-
-    // Kelompokkan tiket Supabase per bulan (WIB-aware)
     const permintaanDbByMonth = new Map<string, any[]>();
+
     for (const t of permintaanList) {
       if (!t.created_at) continue;
-      // Konversi UTC ke WIB (+7 jam) untuk menentukan bulan yang benar
       const dateUTC = new Date(t.created_at);
       const wibMs = dateUTC.getTime() + 7 * 3600000;
       const wibDate = new Date(wibMs);
@@ -168,30 +168,37 @@ export async function GET(request: NextRequest) {
       let durationCount = 0;
       const statuses: Record<string, number> = {};
 
+      let p1Total = 0, p1Done = 0;
+      let p2Total = 0, p2Done = 0;
+      let p3Total = 0, p3Done = 0;
+      let p4Total = 0, p4Done = 0;
+
       for (const t of tickets) {
         const st = (t.status || "TO DO").toUpperCase();
         statuses[st] = (statuses[st] || 0) + 1;
+        const isDone = st === "DONE";
 
-        if (st === "DONE") {
-          selesai++;
-          const created = new Date(t.created_at);
-          const updated = t.updated_at ? new Date(t.updated_at) : null;
-          const due = t.due_date ? new Date(t.due_date) : null;
+        const created = new Date(t.created_at);
+        const updated = t.updated_at ? new Date(t.updated_at) : null;
+        const due = t.due_date ? new Date(t.due_date) : null;
 
-          // Cek ketepatan waktu (On Time)
-          let isDoneOnTime = true;
-          if (due) {
-            const dueEndTimestamp = due.getTime() + 24 * 3600 * 1000;
-            const isUpdatedInActiveMonth =
-              updated &&
-              ((updated.getFullYear() === created.getFullYear() &&
-                updated.getMonth() === created.getMonth()) ||
-                updated.getTime() - created.getTime() <= 14 * 86400000);
+        // Cek ketepatan waktu (On Time)
+        let isDoneOnTime = true;
+        if (due) {
+          const dueEndTimestamp = due.getTime() + 24 * 3600 * 1000;
+          const isUpdatedInActiveMonth =
+            updated &&
+            ((updated.getFullYear() === created.getFullYear() &&
+              updated.getMonth() === created.getMonth()) ||
+              updated.getTime() - created.getTime() <= 14 * 86400000);
 
-            if (isUpdatedInActiveMonth && updated) {
-              isDoneOnTime = updated.getTime() <= dueEndTimestamp;
-            }
+          if (isUpdatedInActiveMonth && updated) {
+            isDoneOnTime = updated.getTime() <= dueEndTimestamp;
           }
+        }
+
+        if (isDone) {
+          selesai++;
           if (isDoneOnTime) onTime++;
 
           // Hitung durasi pengerjaan yang wajar (dalam jam)
@@ -214,12 +221,42 @@ export async function GET(request: NextRequest) {
         }
 
         if (st === "REVISION" || st === "REVIEW") eskalasi++;
+
+        // Priority breakdown berdasarkan estimasi target due_date
+        let diffDays = 14;
+        if (t.created_at && t.due_date) {
+          const dDays =
+            (new Date(t.due_date).getTime() - new Date(t.created_at).getTime()) /
+            (1000 * 3600 * 24);
+          if (dDays > 0) diffDays = dDays;
+        }
+
+        if (diffDays <= 2) {
+          p1Total++;
+          if (isDone && isDoneOnTime) p1Done++;
+        } else if (diffDays <= 5) {
+          p2Total++;
+          if (isDone && isDoneOnTime) p2Done++;
+        } else if (diffDays <= 10) {
+          p3Total++;
+          if (isDone && isDoneOnTime) p3Done++;
+        } else {
+          p4Total++;
+          if (isDone && isDoneOnTime) p4Done++;
+        }
       }
 
       const resRate = masuk > 0 ? Math.round((selesai / masuk) * 1000) / 10 : null;
       const slaPct = selesai > 0 ? Math.round((onTime / selesai) * 1000) / 10 : null;
       const avgDurationHours =
         durationCount > 0 ? Math.round((totalDurationHours / durationCount) * 10) / 10 : null;
+
+      const priorityBreakdown = {
+        p1: { pct: p1Total > 0 ? Math.round((p1Done / p1Total) * 1000) / 10 : null, done: p1Done, total: p1Total },
+        p2: { pct: p2Total > 0 ? Math.round((p2Done / p2Total) * 1000) / 10 : null, done: p2Done, total: p2Total },
+        p3: { pct: p3Total > 0 ? Math.round((p3Done / p3Total) * 1000) / 10 : null, done: p3Done, total: p3Total },
+        p4: { pct: p4Total > 0 ? Math.round((p4Done / p4Total) * 1000) / 10 : null, done: p4Done, total: p4Total },
+      };
 
       permintaanByMonth.set(period, {
         masuk,
@@ -230,41 +267,8 @@ export async function GET(request: NextRequest) {
         avgDurationHours,
         eskalasi,
         statuses,
+        priorityBreakdown,
       });
-    }
-
-    // Untuk tahun 2026: overlay data statis INITIAL_REKAP_DATA_2026
-    // pada bulan-bulan yang belum ada di Supabase atau jumlah tiketnya
-    // lebih sedikit dari 50% data statis (data tidak lengkap).
-    if (year === 2026) {
-      for (const staticMonth of INITIAL_REKAP_DATA_2026.monthlyData) {
-        if (!staticMonth.active) continue;
-        const mm = String(staticMonth.monthIndex).padStart(2, "0");
-        const period = `2026-${mm}`;
-        const dbData = permintaanByMonth.get(period);
-
-        // Gunakan data statis jika Supabase tidak punya / kurang lengkap
-        const shouldUseStatic = !dbData || dbData.masuk < staticMonth.masuk * 0.5;
-        if (shouldUseStatic) {
-          const onTimeCount =
-            staticMonth.slaTercapaiPct !== null
-              ? Math.round((staticMonth.slaTercapaiPct / 100) * staticMonth.selesai)
-              : staticMonth.selesai;
-          permintaanByMonth.set(period, {
-            masuk: staticMonth.masuk,
-            selesai: staticMonth.selesai,
-            resRate: staticMonth.resRate,
-            onTime: onTimeCount,
-            slaPct: staticMonth.slaTercapaiPct,
-            avgDurationHours: staticMonth.durasiJam,
-            eskalasi: staticMonth.eskalasiCount,
-            statuses: {
-              DONE: staticMonth.selesai,
-              "TO DO": Math.max(staticMonth.masuk - staticMonth.selesai, 0),
-            },
-          });
-        }
-      }
     }
 
     // ============================================================
@@ -287,6 +291,12 @@ export async function GET(request: NextRequest) {
       const avgDurationHours = pData?.avgDurationHours ?? null;
       const eskalasi = pData?.eskalasi ?? 0;
       const permintaanStatuses = pData?.statuses ?? {};
+      const priorityBreakdown = pData?.priorityBreakdown || {
+        p1: { pct: null, done: 0, total: 0 },
+        p2: { pct: null, done: 0, total: 0 },
+        p3: { pct: null, done: 0, total: 0 },
+        p4: { pct: null, done: 0, total: 0 },
+      };
 
       // --- 2. DAILY ACTIVITY ---
       const monthDaily = dailyList.filter((d) => d.activity_date?.startsWith(period));
@@ -390,12 +400,7 @@ export async function GET(request: NextRequest) {
           slaPct,
           avgDurationHours,
           eskalasi,
-          priorityBreakdown: INITIAL_REKAP_DATA_2026.monthlyData.find((sm) => sm.monthIndex === m)?.priorityBreakdown || {
-            p1: { pct: null, done: 0, total: 0 },
-            p2: { pct: null, done: 0, total: 0 },
-            p3: { pct: null, done: 0, total: 0 },
-            p4: { pct: null, done: 0, total: 0 },
-          },
+          priorityBreakdown,
         },
         daily: {
           total: dailyTotal,
@@ -447,7 +452,7 @@ export async function GET(request: NextRequest) {
               validDurations.length) *
               10
           ) / 10
-        : 6.0;
+        : 0;
 
     const permintaanResRate =
       totalMasuk > 0 ? Math.round((totalSelesai / totalMasuk) * 1000) / 10 : 100;
@@ -497,46 +502,46 @@ export async function GET(request: NextRequest) {
     });
 
     // Priority breakdown aggregation across active months
-    const p1Total = activeMonths.reduce((acc, m) => acc + (m.permintaan.priorityBreakdown?.p1.total || 0), 0);
-    const p1Done = activeMonths.reduce((acc, m) => acc + (m.permintaan.priorityBreakdown?.p1.done || 0), 0);
-    const p2Total = activeMonths.reduce((acc, m) => acc + (m.permintaan.priorityBreakdown?.p2.total || 0), 0);
-    const p2Done = activeMonths.reduce((acc, m) => acc + (m.permintaan.priorityBreakdown?.p2.done || 0), 0);
-    const p3Total = activeMonths.reduce((acc, m) => acc + (m.permintaan.priorityBreakdown?.p3.total || 0), 0);
-    const p3Done = activeMonths.reduce((acc, m) => acc + (m.permintaan.priorityBreakdown?.p3.done || 0), 0);
-    const p4Total = activeMonths.reduce((acc, m) => acc + (m.permintaan.priorityBreakdown?.p4.total || 0), 0);
-    const p4Done = activeMonths.reduce((acc, m) => acc + (m.permintaan.priorityBreakdown?.p4.done || 0), 0);
+    const p1TotalYtd = activeMonths.reduce((acc, m) => acc + (m.permintaan.priorityBreakdown?.p1.total || 0), 0);
+    const p1DoneYtd = activeMonths.reduce((acc, m) => acc + (m.permintaan.priorityBreakdown?.p1.done || 0), 0);
+    const p2TotalYtd = activeMonths.reduce((acc, m) => acc + (m.permintaan.priorityBreakdown?.p2.total || 0), 0);
+    const p2DoneYtd = activeMonths.reduce((acc, m) => acc + (m.permintaan.priorityBreakdown?.p2.done || 0), 0);
+    const p3TotalYtd = activeMonths.reduce((acc, m) => acc + (m.permintaan.priorityBreakdown?.p3.total || 0), 0);
+    const p3DoneYtd = activeMonths.reduce((acc, m) => acc + (m.permintaan.priorityBreakdown?.p3.done || 0), 0);
+    const p4TotalYtd = activeMonths.reduce((acc, m) => acc + (m.permintaan.priorityBreakdown?.p4.total || 0), 0);
+    const p4DoneYtd = activeMonths.reduce((acc, m) => acc + (m.permintaan.priorityBreakdown?.p4.done || 0), 0);
 
     const priorityOverall = {
-      p1: { pct: p1Total > 0 ? Math.round((p1Done / p1Total) * 1000) / 10 : 57.1, done: p1Done || 4, total: p1Total || 7 },
-      p2: { pct: p2Total > 0 ? Math.round((p2Done / p2Total) * 1000) / 10 : 33.3, done: p2Done || 3, total: p2Total || 9 },
-      p3: { pct: p3Total > 0 ? Math.round((p3Done / p3Total) * 1000) / 10 : 70.8, done: p3Done || 150, total: p3Total || 212 },
-      p4: { pct: p4Total > 0 ? Math.round((p4Done / p4Total) * 1000) / 10 : 79.7, done: p4Done || 188, total: p4Total || 236 },
+      p1: { pct: p1TotalYtd > 0 ? Math.round((p1DoneYtd / p1TotalYtd) * 1000) / 10 : 100, done: p1DoneYtd, total: p1TotalYtd },
+      p2: { pct: p2TotalYtd > 0 ? Math.round((p2DoneYtd / p2TotalYtd) * 1000) / 10 : 100, done: p2DoneYtd, total: p2TotalYtd },
+      p3: { pct: p3TotalYtd > 0 ? Math.round((p3DoneYtd / p3TotalYtd) * 1000) / 10 : 100, done: p3DoneYtd, total: p3TotalYtd },
+      p4: { pct: p4TotalYtd > 0 ? Math.round((p4DoneYtd / p4TotalYtd) * 1000) / 10 : 100, done: p4DoneYtd, total: p4TotalYtd },
     };
 
-    const finalMasuk = year === 2026 && totalMasuk >= 460 ? 472 : totalMasuk;
-    const finalSelesai = year === 2026 && totalSelesai >= 450 ? 464 : totalSelesai;
-    const finalSla = year === 2026 ? 74.4 : permintaanSlaPct;
-    const finalAvg = year === 2026 ? 18.8 : avgDuration;
-    const finalEskalasi = year === 2026 ? 6 : totalEskalasi;
+    let slaGradeYtd = "Sangat Baik";
+    if (permintaanSlaPct >= 90) slaGradeYtd = "Sangat Baik";
+    else if (permintaanSlaPct >= 80) slaGradeYtd = "Baik";
+    else if (permintaanSlaPct >= 65) slaGradeYtd = "Cukup Baik";
+    else slaGradeYtd = "Kurang Baik";
 
     const result = {
       year,
       months,
       totals: {
-        permintaanMasuk: finalMasuk,
-        permintaanSelesai: finalSelesai,
-        permintaanResRate: finalMasuk > 0 ? Math.round((finalSelesai / finalMasuk) * 1000) / 10 : 100,
-        permintaanSlaPct: finalSla,
-        permintaanAvgHours: finalAvg,
-        permintaanEskalasi: finalEskalasi,
+        permintaanMasuk: totalMasuk,
+        permintaanSelesai: totalSelesai,
+        permintaanResRate,
+        permintaanSlaPct,
+        permintaanAvgHours: avgDuration,
+        permintaanEskalasi: totalEskalasi,
         permintaanStatuses,
 
-        slaAchievementYtd: finalSla,
-        slaGradeYtd: "Cukup Baik",
-        eligibleTickets: finalSelesai,
+        slaAchievementYtd: permintaanSlaPct,
+        slaGradeYtd,
+        eligibleTickets: totalSelesai,
         vendorExcluded: 0,
-        escalationCount: finalEskalasi,
-        escalationPct: finalMasuk > 0 ? Math.round((finalEskalasi / finalMasuk) * 1000) / 10 : 1.3,
+        escalationCount: totalEskalasi,
+        escalationPct: totalMasuk > 0 ? Math.round((totalEskalasi / totalMasuk) * 1000) / 10 : 0,
         priorityOverall,
 
         dailyTotal,

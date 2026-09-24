@@ -151,17 +151,26 @@ const data = {
 
 function SidebarLogo() {
   const { isMobile, setOpenMobile } = useSidebar();
+  const [imgError, setImgError] = React.useState(false);
 
   return (
     <div className="flex h-12 items-center justify-between px-3 w-full">
       <div className="flex items-center gap-2 overflow-hidden">
-        <Image
-          src={"/lourdes.png"}
-          width={32}
-          height={32}
-          alt="Lourdes Autoparts"
-          className="h-8 w-auto shrink-0"
-        />
+        {!imgError ? (
+          <Image
+            src="/lourdes.png"
+            width={32}
+            height={32}
+            alt="Lourdes Autoparts"
+            className="h-8 w-auto shrink-0 object-contain"
+            unoptimized
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-xs shrink-0">
+            L
+          </div>
+        )}
         <span className={isMobile ? "text-sm font-semibold truncate inline" : "hidden text-sm font-semibold truncate group-data-[state=expanded]:inline"}>
           Lourdes Autoparts
         </span>
