@@ -321,7 +321,7 @@ export function RekapBulananPage() {
         </div>
         <h2 className="text-xl font-bold tracking-tight text-foreground">Akses Terbatas (Admin Only)</h2>
         <p className="text-sm text-muted-foreground mt-2 max-w-md">
-          Halaman Rekap Bulanan Terintegrasi 4 Modul (Permintaan Desain, Attendance, Daily Activity, dan STB HSE) hanya dapat diakses oleh pengguna dengan role Administrator.
+          Halaman Rekap Bulanan Terintegrasi 4 Modul (Permintaan Desain, Attendance, Daily Activity, dan Safety Toolbox / STB HSE) hanya dapat diakses oleh pengguna dengan role Administrator.
         </p>
         <Link
           href="/dashboard"
@@ -355,7 +355,7 @@ export function RekapBulananPage() {
                 </span>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Laporan komprehensif terintegrasi Permintaan Design, Daily Activity, Attendance, &amp; Standby STB HSE sesuai target SLA.
+                Laporan komprehensif terintegrasi Permintaan Design, Daily Activity, Attendance, &amp; Safety Toolbox (STB HSE) sesuai target SLA.
               </p>
             </div>
           </div>
@@ -719,10 +719,10 @@ export function RekapBulananPage() {
           </div>
           <div className="text-2xl font-bold text-foreground mt-1">
             {highlightTotals?.stbTotalStandby ?? 0}
-            <span className="text-sm font-medium text-muted-foreground ml-1">hari standby</span>
+            <span className="text-sm font-medium text-muted-foreground ml-1">sesi STB</span>
           </div>
           <div className="text-[11px] text-muted-foreground mt-0.5">
-            {highlightTotals?.stbCountH ?? 0}H Siang · {highlightTotals?.stbCountHSmall ?? 0}h Malam · {highlightTotals?.stbPersonil ?? 0} personil
+            {highlightTotals?.stbCountH ?? 0} Siang (H) · {highlightTotals?.stbCountHSmall ?? 0} Malam (h) · {highlightTotals?.stbPersonil ?? 0} personil
           </div>
         </div>
       </div>
@@ -739,7 +739,7 @@ export function RekapBulananPage() {
               <ShieldCheck className="size-3.5 inline text-emerald-600 mr-1 -mt-0.5" />
               SLA Terintegrasi
             </span>{" "}
-            memadukan kecepatan pengerjaan desain, penyelesaian checklist aktivitas harian, tingkat disiplin kehadiran staf, dan konsistensi jadwal standby HSE.
+            memadukan kecepatan pengerjaan desain, penyelesaian checklist aktivitas harian, tingkat disiplin kehadiran staf, dan konsistensi pelaksanaan Safety Toolbox (STB HSE).
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
@@ -1015,7 +1015,7 @@ export function RekapBulananPage() {
                 <th className="py-2.5 px-3 text-center">Daily Activity</th>
                 <th className="py-2.5 px-3 text-center">Hadir (PRS)</th>
                 <th className="py-2.5 px-3 text-center">Lembur (Jam)</th>
-                <th className="py-2.5 px-3 text-center">STB HSE (Hari)</th>
+                <th className="py-2.5 px-3 text-center">Safety Toolbox (Sesi)</th>
                 <th className="py-2.5 px-3 text-center">SLA %</th>
                 <th className="py-2.5 px-4 text-center">KPI Grade</th>
               </tr>
@@ -1321,10 +1321,10 @@ export function RekapBulananPage() {
                 <tr className="bg-muted/50 text-muted-foreground text-[10px] uppercase font-semibold tracking-wider border-b">
                   <th className="py-2.5 px-4 text-left">Bulan</th>
                   <th className="py-2.5 px-3 text-center">Personil Aktif</th>
-                  <th className="py-2.5 px-3 text-center">Shift Siang (H)</th>
-                  <th className="py-2.5 px-3 text-center">Shift Malam (h)</th>
-                  <th className="py-2.5 px-3 text-center">Standby Lainnya</th>
-                  <th className="py-2.5 px-3 text-center">Total Hari Standby</th>
+                  <th className="py-2.5 px-3 text-center">STB Siang (H)</th>
+                  <th className="py-2.5 px-3 text-center">STB Malam (h)</th>
+                  <th className="py-2.5 px-3 text-center">Lainnya</th>
+                  <th className="py-2.5 px-3 text-center">Total Sesi STB</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
@@ -1340,7 +1340,7 @@ export function RekapBulananPage() {
                     </td>
                     <td className="py-2.5 px-3 text-center text-muted-foreground">{m.stb.countOther}</td>
                     <td className="py-2.5 px-3 text-center font-bold text-foreground">
-                      {m.stb.totalStandby} Hari
+                      {m.stb.totalStandby} Sesi
                     </td>
                   </tr>
                 ))}
