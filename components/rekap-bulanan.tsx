@@ -244,37 +244,9 @@ export function RekapBulananPage() {
     };
   }, [rekap, selectedMonth]);
 
-  if (roleLoading || loading || !rekap) {
-    return (
-      <div className="col-span-12 w-full flex flex-col items-center justify-center p-20 text-muted-foreground">
-        <Loader2 className="size-8 animate-spin mb-3 text-primary" />
-        <span className="text-sm font-medium">Memuat rekap bulanan terintegrasi 4 modul...</span>
-      </div>
-    );
-  }
-
-  // Jika sudah terverifikasi dan bukan admin, tampilkan restricted access
-  if (userRole && userRole !== "admin") {
-    return (
-      <div className="col-span-12 w-full flex flex-col items-center justify-center p-16 text-center bg-card border rounded-2xl shadow-xs">
-        <div className="size-14 rounded-full bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 flex items-center justify-center text-rose-600 dark:text-rose-400 mb-4 shadow-xs">
-          <ShieldAlert className="size-7" />
-        </div>
-        <h2 className="text-xl font-bold tracking-tight text-foreground">Akses Terbatas (Admin Only)</h2>
-        <p className="text-sm text-muted-foreground mt-2 max-w-md">
-          Halaman Rekap Bulanan Terintegrasi 4 Modul (Permintaan Desain, Attendance, Daily Activity, dan STB HSE) hanya dapat diakses oleh pengguna dengan role Administrator.
-        </p>
-        <Link
-          href="/dashboard"
-          className="mt-6 inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs transition-colors"
-        >
-          <ArrowLeft className="size-4" />
-          Kembali ke Dashboard
-        </Link>
-      </div>
-    );
-  }
-
+  // =====================================================================
+  // highlightTotals: harus di sini (sebelum early return) — Rules of Hooks
+  // =====================================================================
   const highlightTotals = useMemo(() => {
     if (!rekap) return null;
     if (selectedMonth === "all") {
@@ -327,6 +299,37 @@ export function RekapBulananPage() {
       stbCountHSmall: m.stb.countHSmall,
     };
   }, [rekap, selectedMonth]);
+
+  if (roleLoading || loading || !rekap) {
+    return (
+      <div className="col-span-12 w-full flex flex-col items-center justify-center p-20 text-muted-foreground">
+        <Loader2 className="size-8 animate-spin mb-3 text-primary" />
+        <span className="text-sm font-medium">Memuat rekap bulanan terintegrasi 4 modul...</span>
+      </div>
+    );
+  }
+
+  // Jika sudah terverifikasi dan bukan admin, tampilkan restricted access
+  if (userRole && userRole !== "admin") {
+    return (
+      <div className="col-span-12 w-full flex flex-col items-center justify-center p-16 text-center bg-card border rounded-2xl shadow-xs">
+        <div className="size-14 rounded-full bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900 flex items-center justify-center text-rose-600 dark:text-rose-400 mb-4 shadow-xs">
+          <ShieldAlert className="size-7" />
+        </div>
+        <h2 className="text-xl font-bold tracking-tight text-foreground">Akses Terbatas (Admin Only)</h2>
+        <p className="text-sm text-muted-foreground mt-2 max-w-md">
+          Halaman Rekap Bulanan Terintegrasi 4 Modul (Permintaan Desain, Attendance, Daily Activity, dan STB HSE) hanya dapat diakses oleh pengguna dengan role Administrator.
+        </p>
+        <Link
+          href="/dashboard"
+          className="mt-6 inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 shadow-xs transition-colors"
+        >
+          <ArrowLeft className="size-4" />
+          Kembali ke Dashboard
+        </Link>
+      </div>
+    );
+  }
 
   const totals = rekap.totals;
 
@@ -701,7 +704,7 @@ export function RekapBulananPage() {
             {highlightTotals?.attendanceRate ?? 0}%
           </div>
           <div className="text-[11px] text-muted-foreground mt-0.5">
-            {highlightTotals?.attendancePrs ?? 0} Hadir (PRS) · {highlightTotals?.attendanceOvt ?? 0} Hari Lembur
+            {highlightTotals?.attendancePrs ?? 0} Hadir (PRS) · {highlightTotals?.attendanceOvt ?? 0} Hari OVT
           </div>
         </div>
 
@@ -713,9 +716,10 @@ export function RekapBulananPage() {
           </div>
           <div className="text-2xl font-bold text-foreground mt-1">
             {highlightTotals?.stbTotalStandby ?? 0}
+            <span className="text-sm font-medium text-muted-foreground ml-1">hari</span>
           </div>
           <div className="text-[11px] text-muted-foreground mt-0.5">
-            {highlightTotals?.stbCountH ?? 0} Siang (H) · {highlightTotals?.stbCountHSmall ?? 0} Malam (h)
+            {highlightTotals?.stbCountH ?? 0} Shift Siang (H) · {highlightTotals?.stbCountHSmall ?? 0} Shift Malam (h)
           </div>
         </div>
       </div>
