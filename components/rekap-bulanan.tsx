@@ -260,6 +260,7 @@ export function RekapBulananPage() {
         attendancePrs: rekap.totals.attendancePrs ?? 0,
         attendanceOvt: rekap.totals.attendanceOvt ?? 0,
         attendanceRate: rekap.totals.attendanceRate ?? 0,
+        stbPersonil: rekap.totals.stbPersonil ?? 0,
         stbTotalStandby: rekap.totals.stbTotalStandby ?? 0,
         stbCountH: rekap.totals.stbCountH ?? 0,
         stbCountHSmall: rekap.totals.stbCountHSmall ?? 0,
@@ -278,6 +279,7 @@ export function RekapBulananPage() {
         attendancePrs: 0,
         attendanceOvt: 0,
         attendanceRate: 0,
+        stbPersonil: 0,
         stbTotalStandby: 0,
         stbCountH: 0,
         stbCountHSmall: 0,
@@ -294,6 +296,7 @@ export function RekapBulananPage() {
       attendancePrs: m.attendance.prs,
       attendanceOvt: m.attendance.ovt,
       attendanceRate: m.attendance.attendanceRate ?? 0,
+      stbPersonil: m.stb.personil,
       stbTotalStandby: m.stb.totalStandby,
       stbCountH: m.stb.countH,
       stbCountHSmall: m.stb.countHSmall,
@@ -704,7 +707,7 @@ export function RekapBulananPage() {
             {highlightTotals?.attendanceRate ?? 0}%
           </div>
           <div className="text-[11px] text-muted-foreground mt-0.5">
-            {highlightTotals?.attendancePrs ?? 0} Hadir (PRS) · {highlightTotals?.attendanceOvt ?? 0} Hari OVT
+            {highlightTotals?.attendancePrs ?? 0} Hadir (PRS) · {highlightTotals?.attendanceOvt ?? 0} hari OVT
           </div>
         </div>
 
@@ -716,10 +719,10 @@ export function RekapBulananPage() {
           </div>
           <div className="text-2xl font-bold text-foreground mt-1">
             {highlightTotals?.stbTotalStandby ?? 0}
-            <span className="text-sm font-medium text-muted-foreground ml-1">hari</span>
+            <span className="text-sm font-medium text-muted-foreground ml-1">hari standby</span>
           </div>
           <div className="text-[11px] text-muted-foreground mt-0.5">
-            {highlightTotals?.stbCountH ?? 0} Shift Siang (H) · {highlightTotals?.stbCountHSmall ?? 0} Shift Malam (h)
+            {highlightTotals?.stbCountH ?? 0}H Siang · {highlightTotals?.stbCountHSmall ?? 0}h Malam · {highlightTotals?.stbPersonil ?? 0} personil
           </div>
         </div>
       </div>
